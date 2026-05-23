@@ -2,6 +2,7 @@ from fastapi import APIRouter , Depends
 from datetime import timedelta
 from sqlalchemy.orm import Session
 from typing import List
+from uuid import UUID
 
 from app.db.session import get_db
 from app.auth.oauth2 import get_current_user
@@ -11,6 +12,7 @@ from app.schema.commitment import (
 CommitmentCreate,
 CommitmentResponse
 )
+from app.utils.commitment import get_user_commitments
 
 router = APIRouter(
     prefix = "/commitments",
@@ -49,3 +51,19 @@ def get_commitments(
 ):
     commitments = db.query(Commitment).filter(Commitment.user_id == current_user.id).all()
     return commitments
+
+
+@router.get("/{commitment_id}", response_model=CommitmentResponse)
+def get_commitment(
+        commitment_id: UUID,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+
+    commitment = get_user_commitments(
+        commitment_id,
+        current_user,
+        db
+    )
+
+    return commitment
