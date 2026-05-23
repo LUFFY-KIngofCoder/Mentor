@@ -9,8 +9,8 @@ from app.auth.oauth2 import get_current_user
 
 from app.models import Commitment , User
 from app.schema.commitment import (
-CommitmentCreate,
-CommitmentResponse
+    CommitmentCreate,
+    CommitmentResponse, CommitmentUpdate
 )
 from app.utils.commitment import get_user_commitments
 
@@ -67,3 +67,55 @@ def get_commitment(
     )
 
     return commitment
+
+@router.patch("/{commitment_id}", response_model=CommitmentResponse)
+def update_commitment(
+        commitment_id: UUID,
+        commitment_update: CommitmentUpdate,
+
+        db: Session = Depends(get_db),
+
+        current_user: User = Depends(get_current_user)
+):
+
+    commitment = get_user_commitments(
+        commitment_id,
+        current_user,
+        db
+    )
+
+    update_data = commitment_update.model_dump(
+        exclude_unset=True
+    )
+
+    for key, value in update_data.items():
+        setattr(commitment, key, value)
+
+    if (
+        "start_date" in update_data
+        or "duration_days" in update_data
+    ):
+        commitment.end_date = commitment.start_date + timedelta(days=commitment.duration_days)
+
+    db.commit()
+    db.refresh(commitment)
+
+    return commitment
+
+@router.delete("/{commitment_id}")
+def delete_commitment(
+        commitment_id: UUID,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    commitment = get_user_commitments(
+        commitment_id,
+        current_user,
+        db
+    )
+    db.delete(commitment)
+    db.commit()
+
+    return {
+        "message": "Commitment deleted successfully"
+    }

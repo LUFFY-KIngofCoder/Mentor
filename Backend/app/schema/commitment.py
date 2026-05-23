@@ -28,3 +28,12 @@ class CommitmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CommitmentUpdate(BaseModel):
+    title: str | None = None
+
+    description: str | None = None
+
+    duration_days: int | None = None
+
+    start_date: date | None = None
