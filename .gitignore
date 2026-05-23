@@ -1,0 +1,26 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# VSCode
+.vscode/
+
+# Mac
+.DS_Store
+
+# Pytest
+.pytest_cache/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Node (future frontend)
+node_modules/
+
+# Build
+dist/
+build/
