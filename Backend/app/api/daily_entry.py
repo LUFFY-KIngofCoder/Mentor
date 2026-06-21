@@ -76,3 +76,15 @@ def create_or_update_daily_entry(
     db.refresh(entry)
     
     return entry
+
+@router.get("/", response_model = List[DailyEntryResponse])
+def get_daily_entries(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    entries = db.query(DailyEntry).filter(
+        DailyEntry.user_id == current_user.id
+    ).all()
+
+    return entries
