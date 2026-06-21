@@ -37,3 +37,5 @@ class Commitment(Base):
     updated_at = Column(DateTime(timezone=True), default=now_ist, onupdate=now_ist)
 
     user = relationship("User", back_populates="commitments")
+
+    metrics = relationship("TrackingMetric", back_populates="commitment", cascade="all, delete-orphan")

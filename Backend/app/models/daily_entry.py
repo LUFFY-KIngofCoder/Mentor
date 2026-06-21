@@ -23,7 +23,7 @@ class DailyEntry(Base):
     date = Column(Date, nullable=False)
 
     #Core quantitative metrics
-    sleep_hours = Column(Float, nullable = False)
+    sleep_hours = Column(Float, nullable = True)
     deep_work_hours = Column(Float, nullable = True)
     distraction_hours = Column(Float, nullable = True)
     mood_score = Column(Integer, nullable = True)
