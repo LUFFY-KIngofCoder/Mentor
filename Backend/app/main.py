@@ -5,6 +5,7 @@ from app.api.user import router as user_router
 from app.api.commitment import router as commitment_router
 from app.api.daily_entry import router as daily_entry_router
 from app.api.tracking_metric import router as tracking_metric_router
+from app.api.missed_day_reflection import router as missed_day_reflection_router
 
 app = FastAPI()
 
@@ -21,7 +22,7 @@ app.include_router(user_router)
 app.include_router(commitment_router)
 app.include_router(tracking_metric_router)
 app.include_router(daily_entry_router)
-
+app.include_router(missed_day_reflection_router)
 
 @app.get("/")
 def root():

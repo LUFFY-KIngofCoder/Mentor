@@ -24,14 +24,22 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState<any[]>([]);
   
   // Auth States
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   // UI States
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
   const [isNewCommitmentOpen, setIsNewCommitmentOpen] = useState(false);
+  
+  // Missed Day Reflection States
+  const [unresolvedMissedDates, setUnresolvedMissedDates] = useState<string[]>([]);
+  const [missedReason, setMissedReason] = useState("");
+  const [missedReflectionText, setMissedReflectionText] = useState("");
+  const [isSubmittingMissed, setIsSubmittingMissed] = useState(false);
   
   const getLocalDateString = () => {
     const d = new Date();
@@ -70,9 +78,13 @@ export default function Dashboard() {
     }
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (isSignUp) {
+        await api.post("/users", { name, email, password });
+      }
+
       const formData = new URLSearchParams();
       formData.append("username", email);
       formData.append("password", password);
@@ -87,7 +99,7 @@ export default function Dashboard() {
       setError("");
       fetchDashboardData();
     } catch (err) {
-      setError("Invalid credentials.");
+      setError(isSignUp ? "Failed to create account. Email may be taken." : "Invalid credentials.");
     }
   };
 
@@ -99,6 +111,13 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      const missedRes = await api.get("/missed-days/unresolved");
+      if (missedRes.data && missedRes.data.length > 0) {
+        setUnresolvedMissedDates(missedRes.data);
+      } else {
+        setUnresolvedMissedDates([]);
+      }
+
       const entriesRes = await api.get("/daily-entries/");
       setEntries(entriesRes.data);
 
@@ -126,6 +145,37 @@ export default function Dashboard() {
       fetchDashboardData();
     } catch (err) {
       alert("Failed to auto-save metric.");
+    }
+  };
+
+  const submitMissedDayReflection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (unresolvedMissedDates.length === 0) return;
+    setIsSubmittingMissed(true);
+    try {
+      await api.post("/missed-days/", {
+        missed_date: unresolvedMissedDates[0],
+        reason: missedReason,
+        reflection: missedReflectionText
+      });
+      
+      const newDates = unresolvedMissedDates.slice(1);
+      setUnresolvedMissedDates(newDates);
+      setMissedReason("");
+      setMissedReflectionText("");
+      
+      if (newDates.length === 0) {
+         fetchDashboardData();
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || "Failed to submit reflection.";
+      alert(msg);
+      // If it's a 400 about already existing, refresh data
+      if (msg.includes("already")) {
+          fetchDashboardData();
+      }
+    } finally {
+      setIsSubmittingMissed(false);
     }
   };
 
@@ -194,22 +244,33 @@ export default function Dashboard() {
           <p className="text-neutral-400 font-medium tracking-wide">Behavioral Accountability Engine</p>
         </div>
 
-        <form onSubmit={handleLogin} className="relative z-10 bg-neutral-900/40 p-8 rounded-3xl border border-neutral-800/60 w-[400px] flex flex-col gap-5 backdrop-blur-xl shadow-2xl">
+        <form onSubmit={handleAuth} className="relative z-10 bg-neutral-900/40 p-8 rounded-3xl border border-neutral-800/60 w-[400px] flex flex-col gap-5 backdrop-blur-xl shadow-2xl">
           {error && <p className="text-red-400 text-sm font-medium bg-red-950/30 p-3 rounded-xl border border-red-900/50">{error}</p>}
+          {isSignUp && (
+            <div>
+              <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5 block">Name</label>
+              <input type="text" required className="w-full bg-black/50 p-4 rounded-xl border border-neutral-800/80 outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-white" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+          )}
           <div>
             <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5 block">Email</label>
-            <input type="email" className="w-full bg-black/50 p-4 rounded-xl border border-neutral-800/80 outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-white" value={email} onChange={e => setEmail(e.target.value)} />
+            <input type="email" required className="w-full bg-black/50 p-4 rounded-xl border border-neutral-800/80 outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-white" value={email} onChange={e => setEmail(e.target.value)} />
           </div>
           <div>
             <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1.5 block">Password</label>
             <div className="relative">
-              <input type={showPassword ? "text" : "password"} className="w-full bg-black/50 p-4 pr-12 rounded-xl border border-neutral-800/80 outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-white" value={password} onChange={e => setPassword(e.target.value)} />
+              <input type={showPassword ? "text" : "password"} required className="w-full bg-black/50 p-4 pr-12 rounded-xl border border-neutral-800/80 outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-white" value={password} onChange={e => setPassword(e.target.value)} />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white transition-colors">
                 {showPassword ? <EyeClosed /> : <EyeOpen />}
               </button>
             </div>
           </div>
-          <button type="submit" className="w-full bg-white text-black hover:bg-neutral-200 p-4 rounded-xl font-bold mt-2 transition-transform active:scale-[0.98]">Authenticate</button>
+          <button type="submit" className="w-full bg-white text-black hover:bg-neutral-200 p-4 rounded-xl font-bold mt-2 transition-transform active:scale-[0.98]">
+            {isSignUp ? "Create Account" : "Authenticate"}
+          </button>
+          <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(""); }} className="text-xs font-bold text-neutral-500 hover:text-white transition-colors mt-2">
+            {isSignUp ? "Already have an account? Login" : "No account? Sign Up"}
+          </button>
         </form>
       </div>
     );
@@ -346,6 +407,49 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* ---------------------------------------------------------
+          MISSED DAY TRAPDOOR MODAL (Enforced)
+      --------------------------------------------------------- */}
+      {unresolvedMissedDates.length > 0 && (
+        <div className="fixed inset-0 bg-red-950/40 backdrop-blur-xl z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="bg-neutral-950 border border-red-900/50 w-full max-w-2xl rounded-3xl shadow-[0_0_100px_rgba(220,38,38,0.15)] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div className="bg-red-950/20 p-5 sm:px-8 sm:py-6 border-b border-red-900/30 flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-red-500 flex items-center gap-2">
+                  <span className="text-2xl">⚠️</span> System Lock
+                </h2>
+                <p className="text-red-400/80 text-xs sm:text-sm mt-1 font-medium">You missed your check-in on <span className="text-white font-bold">{new Date(unresolvedMissedDates[0]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}</span>.</p>
+              </div>
+              <div className="bg-red-900/30 text-red-400 text-[10px] font-black tracking-widest px-3 py-1.5 rounded-lg border border-red-900/50 uppercase">
+                {unresolvedMissedDates.length} Pending
+              </div>
+            </div>
+            
+            <form onSubmit={submitMissedDayReflection} className="p-5 sm:p-8 flex flex-col gap-6 overflow-y-auto">
+              <p className="text-neutral-400 text-sm leading-relaxed border-l-2 border-red-500/50 pl-4 italic">
+                Mentor enforces accountability. You cannot access your dashboard until you confront why you slipped. Honest reflections only.
+              </p>
+              
+              <div>
+                <label className="text-xs font-bold text-red-500/80 uppercase tracking-wider mb-1.5 block">What was the reason?</label>
+                <input type="text" required placeholder="e.g., Burnout, bad planning, distraction..." className="w-full bg-black border border-red-900/30 p-4 rounded-xl text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 text-sm transition-all" value={missedReason} onChange={e => setMissedReason(e.target.value)} />
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-red-500/80 uppercase tracking-wider mb-1.5 block">Deep Reflection</label>
+                <textarea rows={4} required className="w-full bg-black border border-red-900/30 p-4 rounded-xl text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 resize-none font-serif text-sm leading-relaxed transition-all" value={missedReflectionText} onChange={e => setMissedReflectionText(e.target.value)} placeholder="Why did this happen? What is the root cause? How do you guarantee it won't happen tomorrow?"></textarea>
+              </div>
+              
+              <div className="pt-2 mt-auto">
+                <button type="submit" disabled={isSubmittingMissed} className="w-full bg-red-600 hover:bg-red-500 text-white font-black text-base py-4 rounded-xl transition-all shadow-[0_0_30px_rgba(220,38,38,0.3)] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
+                  {isSubmittingMissed ? "Submitting..." : "Submit Reflection to Unlock"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ---------------------------------------------------------
           NEW COMMITMENT MODAL

@@ -27,8 +27,8 @@ class User(Base):
         onupdate=func.now()
     )
 
-    commitments = relationship("Commitment", back_populates="user")
+    commitments = relationship("Commitment", back_populates="user", cascade="all, delete-orphan")
 
     daily_entries = relationship("DailyEntry", back_populates="user", cascade="all, delete-orphan")
 
-    
+    missed_reflections = relationship("MissedDayReflection", back_populates="user", cascade="all, delete-orphan" )
