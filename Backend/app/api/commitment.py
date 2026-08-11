@@ -1,10 +1,12 @@
 from fastapi import APIRouter , Depends
 from datetime import timedelta
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import List
 from uuid import UUID
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.auth.oauth2 import get_current_user
 
 from app.models import Commitment , User
@@ -20,9 +22,9 @@ router = APIRouter(
 )
 
 @router.post("/", response_model=CommitmentResponse)
-def create_commitment(
+async def create_commitment(
         commitment: CommitmentCreate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
                       ):
     end_date = (
@@ -39,28 +41,29 @@ def create_commitment(
     )
 
     db.add(new_commitment)
-    db.commit()
-    db.refresh(new_commitment)
+    await db.commit()
+    await db.refresh(new_commitment)
 
     return new_commitment
 
 @router.get("/", response_model=List[CommitmentResponse])
-def get_commitments(
-        db: Session = Depends(get_db),
+async def get_commitments(
+        db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    commitments = db.query(Commitment).filter(Commitment.user_id == current_user.id).all()
+    result = await db.execute(select(Commitment).filter(Commitment.user_id == current_user.id))
+    commitments = result.scalars().all()
     return commitments
 
 
 @router.get("/{commitment_id}", response_model=CommitmentResponse)
-def get_commitment(
+async def get_commitment(
         commitment_id: UUID,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
 
-    commitment = get_user_commitments(
+    commitment = await get_user_commitments(
         commitment_id,
         current_user,
         db
@@ -69,16 +72,16 @@ def get_commitment(
     return commitment
 
 @router.patch("/{commitment_id}", response_model=CommitmentResponse)
-def update_commitment(
+async def update_commitment(
         commitment_id: UUID,
         commitment_update: CommitmentUpdate,
 
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
 
         current_user: User = Depends(get_current_user)
 ):
 
-    commitment = get_user_commitments(
+    commitment = await get_user_commitments(
         commitment_id,
         current_user,
         db
@@ -97,24 +100,24 @@ def update_commitment(
     ):
         commitment.end_date = commitment.start_date + timedelta(days=commitment.duration_days)
 
-    db.commit()
-    db.refresh(commitment)
+    await db.commit()
+    await db.refresh(commitment)
 
     return commitment
 
 @router.delete("/{commitment_id}")
-def delete_commitment(
+async def delete_commitment(
         commitment_id: UUID,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    commitment = get_user_commitments(
+    commitment = await get_user_commitments(
         commitment_id,
         current_user,
         db
     )
-    db.delete(commitment)
-    db.commit()
+    await db.delete(commitment)
+    await db.commit()
 
     return {
         "message": "Commitment deleted successfully"

@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [entries, setEntries] = useState<any[]>([]);
   const [commitments, setCommitments] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any[]>([]);
   
   // Auth States
   const [name, setName] = useState("");
@@ -66,9 +67,9 @@ export default function Dashboard() {
   const [commDescription, setCommDescription] = useState("");
   const [commDuration, setCommDuration] = useState<number | "">("");
   const [commStartDate, setCommStartDate] = useState(getLocalDateString());
-  const [metricType, setMetricType] = useState("boolean");
-  const [metricOperator, setMetricOperator] = useState(">=");
-  const [metricTarget, setMetricTarget] = useState<number | "">("");
+  const [metricsList, setMetricsList] = useState([
+    { name: "", metricType: "boolean", metricOperator: ">=", metricTarget: "" as number | "" }
+  ]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
@@ -106,7 +107,7 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     setToken(null);
-    setEntries([]); setCommitments([]); setMetrics([]);
+    setEntries([]); setCommitments([]); setMetrics([]); setAnalytics([]);
   };
 
   const fetchDashboardData = async () => {
@@ -118,7 +119,7 @@ export default function Dashboard() {
         setUnresolvedMissedDates([]);
       }
 
-      const entriesRes = await api.get("/daily-entries/");
+      const entriesRes = await api.get("/execution-log/");
       setEntries(entriesRes.data);
 
       const commsRes = await api.get("/commitments/");
@@ -130,6 +131,9 @@ export default function Dashboard() {
         allMetrics.push(...metricsRes.data);
       }
       setMetrics(allMetrics);
+
+      const analyticsRes = await api.get("/analytics/");
+      setAnalytics(analyticsRes.data);
     } catch (err) {
       handleLogout();
     }
@@ -216,18 +220,22 @@ export default function Dashboard() {
       });
       
       const newCommId = commRes.data.id;
-      const isBoolean = metricType === "boolean";
 
-      await api.post(`/commitments/${newCommId}/metrics/`, {
-        name: commTitle, // Auto-assign metric name from commitment title
-        metric_type: metricType,
-        operator: isBoolean ? ">=" : metricOperator,
-        target_value: isBoolean ? 1 : Number(metricTarget)
-      });
+      await Promise.all(
+        metricsList.map(metric => {
+          const isBoolean = metric.metricType === "boolean";
+          return api.post(`/commitments/${newCommId}/metrics/`, {
+            name: metric.name.trim() !== "" ? metric.name : commTitle,
+            metric_type: metric.metricType,
+            operator: isBoolean ? ">=" : metric.metricOperator,
+            target_value: isBoolean ? 1 : Number(metric.metricTarget)
+          });
+        })
+      );
 
       setIsNewCommitmentOpen(false);
       setCommTitle(""); setCommDescription(""); setCommDuration(""); 
-      setMetricType("boolean"); setMetricOperator(">="); setMetricTarget("");
+      setMetricsList([{ name: "", metricType: "boolean", metricOperator: ">=", metricTarget: "" }]);
       fetchDashboardData();
     } catch (err) {
       alert("Failed to create commitment.");
@@ -353,6 +361,61 @@ export default function Dashboard() {
       --------------------------------------------------------- */}
       <div className="flex-1 p-6 md:p-12 overflow-y-auto h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-neutral-900/20 via-black to-black">
         <div className="max-w-4xl mx-auto">
+
+          {/* ---- ANALYTICS SECTION ---- */}
+          {analytics.length > 0 && (
+            <div className="mb-14">
+              <div className="mb-6">
+                <h1 className="text-4xl font-black tracking-tighter text-white">Analytics</h1>
+                <p className="text-neutral-500 font-medium mt-1">Performance across your active commitments</p>
+              </div>
+              <div className="grid gap-4">
+                {analytics.map((item: any) => {
+                  const a = item.analytic;
+                  const score = a.consistency_score ?? 0;
+                  const scoreColor = score >= 80 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400';
+                  const scoreBg = score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500';
+                  return (
+                    <div key={item.commitment_id} className="bg-neutral-900/30 border border-neutral-800/50 rounded-2xl p-6 hover:border-neutral-700/80 transition-all">
+                      <div className="flex justify-between items-start mb-5">
+                        <div>
+                          <h3 className="text-lg font-black text-white tracking-tight">{item.commitment_title}</h3>
+                          <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">{a.total_active_days} Days Active</p>
+                        </div>
+                        <div className={`text-2xl font-black ${scoreColor}`}>
+                          {score.toFixed(0)}%
+                          <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest text-right">Consistency</p>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="w-full h-1.5 bg-neutral-800 rounded-full mb-5 overflow-hidden">
+                        <div className={`h-full ${scoreBg} rounded-full transition-all duration-700`} style={{ width: `${Math.min(score, 100)}%` }} />
+                      </div>
+
+                      {/* Stat Grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-black/40 border border-neutral-800/50 rounded-xl p-3 text-center">
+                          <p className="text-xl font-black text-blue-400">{a.streak}</p>
+                          <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">🔥 Streak</p>
+                        </div>
+                        <div className="bg-black/40 border border-neutral-800/50 rounded-xl p-3 text-center">
+                          <p className="text-xl font-black text-white">{a.successful_days}</p>
+                          <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">✅ Won</p>
+                        </div>
+                        <div className="bg-black/40 border border-neutral-800/50 rounded-xl p-3 text-center">
+                          <p className="text-xl font-black text-neutral-400">{a.total_active_days - a.successful_days}</p>
+                          <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">❌ Missed</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ---- EXECUTION LOG SECTION ---- */}
           <div className="mb-10">
             <h1 className="text-4xl font-black tracking-tighter text-white">Execution Log</h1>
             <p className="text-neutral-500 font-medium mt-1">Your historical behavioral data</p>
@@ -366,8 +429,33 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid gap-6">
-              {entries.map((entry) => (
-                <div key={entry.id} className="group bg-neutral-900/30 border border-neutral-800/50 p-6 sm:p-8 rounded-3xl flex flex-col gap-6 hover:border-neutral-700/80 transition-all">
+              {entries.map((entry) => 
+                entry.type === "missed_day" ? (
+                  <div key={entry.id || entry.date} className="group bg-red-950/20 border border-red-900/50 p-6 sm:p-8 rounded-3xl flex flex-col gap-4 hover:border-red-900 transition-all">
+                    <div className="flex justify-between items-center border-b border-red-900/30 pb-4">
+                      <h2 className="text-2xl font-bold text-red-500 tracking-tight">{new Date(entry.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}</h2>
+                      <div className="bg-red-900/30 text-red-400 text-[10px] font-black tracking-widest px-3 py-1.5 rounded-lg border border-red-900/50 uppercase">
+                        MISSED DAY
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {entry.reason && (
+                        <div className="bg-black/30 p-4 rounded-2xl border border-red-900/20 md:col-span-2">
+                          <p className="text-[10px] font-bold text-red-500/70 uppercase tracking-widest mb-1">Reason for Failure</p>
+                          <p className="text-sm text-neutral-300">{entry.reason}</p>
+                        </div>
+                      )}
+                      {entry.reflection && (
+                        <div className="bg-black/30 p-4 rounded-2xl border border-red-900/20 md:col-span-2">
+                          <p className="text-[10px] font-bold text-red-500/70 uppercase tracking-widest mb-1">Deep Reflection</p>
+                          <p className="text-sm text-neutral-300 font-serif italic">"{entry.reflection}"</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                <div key={entry.id || entry.date} className="group bg-neutral-900/30 border border-neutral-800/50 p-6 sm:p-8 rounded-3xl flex flex-col gap-6 hover:border-neutral-700/80 transition-all">
                   <div className="flex justify-between items-center border-b border-neutral-800/50 pb-4">
                     <h2 className="text-2xl font-bold text-white tracking-tight">{new Date(entry.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
                     {entry.energy_score !== null && (
@@ -402,7 +490,8 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              )}
             </div>
           )}
         </div>
@@ -491,33 +580,54 @@ export default function Dashboard() {
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-white mb-4 border-b border-neutral-800 pb-2">Tracking Rule</h3>
-                <div className="bg-neutral-900/40 p-5 rounded-xl border border-neutral-800/50 flex flex-wrap gap-4 items-end">
-                  <div className="flex-1 min-w-[150px]">
-                    <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">How will you track this?</label>
-                    <select className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metricType} onChange={e => setMetricType(e.target.value)}>
-                      <option value="boolean">Yes/No (Check-off)</option>
-                      <option value="hours">Hours</option>
-                      <option value="count">Count (Numbers)</option>
-                    </select>
-                  </div>
-                  
-                  {metricType !== "boolean" && (
-                    <>
-                      <div className="w-24">
-                        <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Logic</label>
-                        <select className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metricOperator} onChange={e => setMetricOperator(e.target.value)}>
-                          <option value=">=">{'>='}</option>
-                          <option value="<=">{'<='}</option>
-                          <option value="==">==</option>
+                <div className="flex justify-between items-center mb-4 border-b border-neutral-800 pb-2">
+                  <h3 className="text-sm font-bold text-white">Tracking Rules</h3>
+                  <button type="button" onClick={() => setMetricsList([...metricsList, { name: "", metricType: "boolean", metricOperator: ">=", metricTarget: "" }])} className="text-[10px] bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 rounded transition-colors uppercase font-bold tracking-wider">
+                    + Add Metric
+                  </button>
+                </div>
+                
+                <div className="flex flex-col gap-3">
+                  {metricsList.map((metric, idx) => (
+                    <div key={idx} className="bg-neutral-900/40 p-4 rounded-xl border border-neutral-800/50 flex flex-wrap gap-4 items-start relative pr-10">
+                      {metricsList.length > 1 && (
+                        <button type="button" onClick={() => setMetricsList(metricsList.filter((_, i) => i !== idx))} className="absolute right-3 top-3 text-neutral-500 hover:text-red-400 transition-colors">
+                          ✕
+                        </button>
+                      )}
+                      
+                      <div className="w-full sm:w-[150px]">
+                        <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Metric Name</label>
+                        <input type="text" placeholder="e.g. Read Pages" className="w-full bg-black border border-neutral-800 p-2.5 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metric.name} onChange={e => { const newM = [...metricsList]; newM[idx].name = e.target.value; setMetricsList(newM); }} />
+                      </div>
+
+                      <div className="flex-1 min-w-[150px]">
+                        <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Type</label>
+                        <select className="w-full bg-black border border-neutral-800 p-2.5 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metric.metricType} onChange={e => { const newM = [...metricsList]; newM[idx].metricType = e.target.value; setMetricsList(newM); }}>
+                          <option value="boolean">Yes/No (Check-off)</option>
+                          <option value="hours">Hours</option>
+                          <option value="count">Count (Numbers)</option>
                         </select>
                       </div>
-                      <div className="w-32">
-                        <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Daily Target</label>
-                        <input type="number" step="0.5" required className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metricTarget} onChange={e => setMetricTarget(e.target.value ? Number(e.target.value) : "")} />
-                      </div>
-                    </>
-                  )}
+                      
+                      {metric.metricType !== "boolean" && (
+                        <>
+                          <div className="w-20">
+                            <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Logic</label>
+                            <select className="w-full bg-black border border-neutral-800 p-2.5 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metric.metricOperator} onChange={e => { const newM = [...metricsList]; newM[idx].metricOperator = e.target.value; setMetricsList(newM); }}>
+                              <option value=">=">{'>='}</option>
+                              <option value="<=">{'<='}</option>
+                              <option value="==">==</option>
+                            </select>
+                          </div>
+                          <div className="w-24">
+                            <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Target</label>
+                            <input type="number" step="0.5" required className="w-full bg-black border border-neutral-800 p-2.5 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metric.metricTarget} onChange={e => { const newM = [...metricsList]; newM[idx].metricTarget = e.target.value === "" ? "" : Number(e.target.value); setMetricsList(newM); }} />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 

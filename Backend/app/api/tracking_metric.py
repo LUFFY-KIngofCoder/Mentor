@@ -1,10 +1,11 @@
+from sqlalchemy import select
 from app.models.commitment import Commitment
 from fastapi import APIRouter, Depends, HTTPException , status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.auth.oauth2 import get_current_user
 from app.models import User, TrackingMetric
 from app.schema.tracking_metric import TrackingMetricCreate, TrackingMetricResponse
@@ -14,16 +15,14 @@ router = APIRouter(
     tags=["Tracking Metrics"]
 )
 
-def get_user_commitment(
+async def get_user_commitment(
     commitment_id: UUID,
     current_user: User,
-    db: Session
+    db: AsyncSession
 ):
-    commitment = db.query(Commitment).filter(
-        Commitment.id == commitment_id,
-        Commitment.user_id == current_user.id
-    ).first()
 
+    result = await db.execute(select(Commitment).filter_by(id=commitment_id, user_id=current_user.id))
+    commitment = result.scalar_one_or_none()
     if not commitment:
         raise HTTPException(status_code=404,
         detail="Commitment not found")
@@ -31,13 +30,13 @@ def get_user_commitment(
     return commitment
 
 @router.post("/", response_model=TrackingMetricResponse)
-def create_metric(
+async def create_metric(
     commitment_id: UUID,
     metric_in: TrackingMetricCreate,
-    db:Session = Depends(get_db),
+    db:AsyncSession = Depends(get_db),
     current_user:User = Depends(get_current_user)
 ):
-    commitment = get_user_commitment(commitment_id, current_user, db)
+    commitment = await get_user_commitment(commitment_id, current_user, db)
 
     new_metric = TrackingMetric(
         commitment_id=commitment.id,
@@ -48,22 +47,25 @@ def create_metric(
     )
 
     db.add(new_metric)
-    db.commit()
-    db.refresh(new_metric)
+    await db.commit()
+    await db.refresh(new_metric)
     
     return new_metric
 
 
 @router.get("/", response_model=List[TrackingMetricResponse])
-def get_metrics(
+async def get_metrics(
     commitment_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    get_user_commitment(commitment_id, current_user, db)
 
-    metrics = db.query(TrackingMetric).filter(
-        TrackingMetric.commitment_id == commitment_id
-        ).all()
+
+    result = await db.execute(select(TrackingMetric
+                                ).join(Commitment, Commitment.id==TrackingMetric.commitment_id
+                                ).filter(Commitment.user_id==current_user.id,
+                                         TrackingMetric.commitment_id==commitment_id)
+                                )
+    metrics = result.scalars().all()
     
     return metrics

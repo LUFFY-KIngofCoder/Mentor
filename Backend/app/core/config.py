@@ -3,8 +3,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+class Settings:
+    DATABASE_URL: str = os.getenv("DATABASE_URL")
+    SECRET_KEY: str = os.getenv("SECRET_KEY")
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-ALGORITHM = "HS256"
+    def __init__(self):
+        # Fail fast if configuration is missing!
+        if not self.DATABASE_URL:
+            raise ValueError("DATABASE_URL is missing in environment variables.")
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY is missing in environment variables.")
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+settings = Settings()

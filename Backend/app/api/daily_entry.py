@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from typing import List
 from uuid import UUID
+from sqlalchemy.orm import selectinload
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.auth.oauth2 import get_current_user
-from app.models import User, DailyEntry, MetricLog
+from app.models import User, DailyEntry, MetricLog, TrackingMetric
 from app.schema.daily_entry import DailyEntryCreate, DailyEntryResponse
+from app.utils.metric import evaluate_metric_success
 
 router = APIRouter(
     prefix="/daily-entries",
@@ -15,16 +18,20 @@ router = APIRouter(
 )
 
 @router.post("/", response_model=DailyEntryResponse)
-def create_or_update_daily_entry(
+async def create_or_update_daily_entry(
     entry_in: DailyEntryCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     # 1. UPSERT LOGIC: Does a Daily Entry already exist for today?
-    entry = db.query(DailyEntry).filter(
-        DailyEntry.user_id == current_user.id,
-        DailyEntry.date == entry_in.date
-    ).first()
+
+    result1 = await db.execute(
+        select(DailyEntry).where(
+            DailyEntry.user_id == current_user.id,
+            DailyEntry.date == entry_in.date
+        ).options(selectinload(DailyEntry.metric_logs))
+    )
+    entry = result1.scalar_one_or_none()
     
     if entry:
         # IT EXISTS: (e.g. ticking off the 2nd habit, or doing evening reflection)
@@ -50,41 +57,76 @@ def create_or_update_daily_entry(
             what_can_be_different=entry_in.what_can_be_different
         )
         db.add(entry)
-        db.flush() # Instantly generate the ID so we can use it below
+        await db.flush() # Instantly generate the ID so we can use it below
         
     # 2. METRIC LOG UPSERT LOGIC
     for custom_metric in entry_in.custom_metrics:
         # Did they already log this specific metric today?
-        existing_log = db.query(MetricLog).filter(
-            MetricLog.daily_entry_id == entry.id,
-            MetricLog.metric_id == custom_metric.metric_id
-        ).first()
+
+        result3 = await db.execute(
+            select(TrackingMetric).where(
+                TrackingMetric.id == custom_metric.metric_id
+            )
+        )
+        tracking_metric = result3.scalar_one_or_none()
+
+        if not tracking_metric:
+            raise HTTPException(
+                status_code = status.HTTP_404_NOT_FOUND,
+                detail = f"Tracking metric {custom_metric.metric_id} not found."
+            )
+
+        is_successful = evaluate_metric_success(
+            value = custom_metric.value,
+            operator = tracking_metric.operator,
+            target = tracking_metric.target_value
+        )
+
+
+        result2 = await db.execute(
+            select(MetricLog).where(
+                MetricLog.daily_entry_id == entry.id,
+                MetricLog.metric_id == custom_metric.metric_id
+            )
+        )
+        existing_log = result2.scalar_one_or_none()
         
         if existing_log:
             # They are updating an existing log (e.g. studied 2 hours, now changed to 4)
             existing_log.value = custom_metric.value
+            existing_log.is_successful = is_successful
         else:
             # First time checking off this specific metric today
             new_log = MetricLog(
                 daily_entry_id=entry.id,
                 metric_id=custom_metric.metric_id,
-                value=custom_metric.value
+                value=custom_metric.value,
+                is_successful=is_successful
             )
             db.add(new_log)
 
-    db.commit()
-    db.refresh(entry)
-    
+    await db.commit()
+    result_final = await db.execute(
+                                    select(DailyEntry)
+                                    .where(DailyEntry.id == entry.id)
+                                    .options(selectinload(DailyEntry.metric_logs))
+                                )
+    entry = result_final.scalar_one()
+                                    
     return entry
 
 @router.get("/", response_model = List[DailyEntryResponse])
-def get_daily_entries(
-    db: Session = Depends(get_db),
+async def get_daily_entries(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
 
-    entries = db.query(DailyEntry).filter(
-        DailyEntry.user_id == current_user.id
-    ).all()
+    result3 = await db.execute(
+        select(DailyEntry).where(
+            DailyEntry.user_id == current_user.id
+        ).options(selectinload(DailyEntry.metric_logs))
+    )
+
+    entries = result3.scalars().all()
 
     return entries

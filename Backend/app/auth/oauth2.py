@@ -1,22 +1,24 @@
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, status, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt, JWTError
+from sqlalchemy import select
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.models.user import User
-from app.core.config import (
-    SECRET_KEY,
-    ALGORITHM
-)
+from app.core.config import settings
+
+SECRET_KEY = settings.SECRET_KEY 
+ALGORITHM = settings.ALGORITHM
+
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/auth/login"
 )
 
-def get_current_user(
+async def get_current_user(
         token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
 
     credentials_exception = HTTPException(
@@ -39,9 +41,8 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(
-        User.id == user_id
-    ).first()
+    result = await db.execute(select(User).filter_by(id=user_id))
+    user = result.scalars().first()
 
     if user is None:
         raise credentials_exception

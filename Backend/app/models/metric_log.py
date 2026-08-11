@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Float, DateTime, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -24,3 +24,5 @@ class MetricLog(Base):
     #Relationship
     daily_entry = relationship("DailyEntry", back_populates="metric_logs")
     metric = relationship("TrackingMetric", back_populates="logs")
+
+    is_successful = Column(Boolean, nullable=False, default=False)    

@@ -6,6 +6,8 @@ from app.api.commitment import router as commitment_router
 from app.api.daily_entry import router as daily_entry_router
 from app.api.tracking_metric import router as tracking_metric_router
 from app.api.missed_day_reflection import router as missed_day_reflection_router
+from app.api.execution_log import router as execution_log_router
+from app.api.analytics import router as analytics_router
 
 app = FastAPI()
 
@@ -23,7 +25,9 @@ app.include_router(commitment_router)
 app.include_router(tracking_metric_router)
 app.include_router(daily_entry_router)
 app.include_router(missed_day_reflection_router)
+app.include_router(execution_log_router)
+app.include_router(analytics_router)
 
 @app.get("/")
 def root():
-    return {"message": "Mentor Backend Running"}
+    return {"message": "Mentor Backend Running"} 

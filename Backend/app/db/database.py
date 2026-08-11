@@ -1,14 +1,17 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
-import os
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.orm import declarative_base
+from app.core.config import settings
 
-load_dotenv()
+# 1. Create the Async Engine
+engine = create_async_engine(settings.DATABASE_URL, echo=False)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+# 2. Create the Async Session Factory
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
-engine = create_engine(DATABASE_URL)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+# 3. Base class for all your models
 Base = declarative_base()
+
+# 4. The FastAPI Dependency (moved from session.py)
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session

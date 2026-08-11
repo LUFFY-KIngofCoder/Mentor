@@ -1,11 +1,12 @@
 from sqlalchemy.exc import IntegrityError
 from app.schema.missed_day_reflection import MissedDayReflectionCreate, MissedDayReflectionResponse
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from datetime import timedelta, date
 from typing import List
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.auth.oauth2 import get_current_user
 from app.models import User, Commitment, DailyEntry, MissedDayReflection
 from app.utils.time import now_ist
@@ -16,8 +17,8 @@ router = APIRouter(
     )
 
 @router.get("/unresolved", response_model=List[date])
-def get_unresolved_missed_days(
-    db: Session = Depends(get_db),
+async def get_unresolved_missed_days(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     # 1. Figure out "Behavioral Yesterday"
@@ -26,9 +27,8 @@ def get_unresolved_missed_days(
     behavioral_yesterday = (behavioral_today_datetime-timedelta(days=1)).date()
 
     # 2. Get the very first commitment start date
-    first_commitment = db.query(Commitment).filter(
-        Commitment.user_id == current_user.id
-    ).order_by(Commitment.start_date.asc()).first()
+    result = await db.execute(select(Commitment).filter(Commitment.user_id==current_user.id).order_by(Commitment.start_date.asc()))
+    first_commitment = result.scalar_one_or_none()
 
     if not first_commitment or first_commitment.start_date > behavioral_yesterday:
         return [] # No commitments, or they just started today
@@ -41,14 +41,16 @@ def get_unresolved_missed_days(
     expected_dates = {start_date+timedelta(days=i) for i in range((behavioral_yesterday-start_date).days+1)}
     
     # Step 4: Run 1 query to get all dates from DailyEntry for this user
-    daily_entry_dates = {row[0] for row in db.query(DailyEntry.date).filter(
+    result_daily = await db.execute(select(DailyEntry.date).filter(
         DailyEntry.user_id == current_user.id
-        ).all()}
-    
+        ))
+    daily_entry_dates = {row[0] for row in result_daily.all()}
+
     # Step 5: Run 1 query to get all missed_dates from MissedDayReflection for this user
-    missed_day_dates = {row[0] for row in db.query(MissedDayReflection.missed_date).filter(
+    result_missed = await db.execute(select(MissedDayReflection.missed_date).filter(
         MissedDayReflection.user_id == current_user.id
-        ).all()}
+        ))
+    missed_day_dates = {row[0] for row in result_missed.all()}
     
     # Step 6: Combine them into logged_dates set
     logged_dates = daily_entry_dates | missed_day_dates
@@ -61,9 +63,9 @@ def get_unresolved_missed_days(
 
 
 @router.post("/", response_model = MissedDayReflectionResponse)
-def missed_day_reflection(
+async def missed_day_reflection(
     reflection: MissedDayReflectionCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     
@@ -75,10 +77,10 @@ def missed_day_reflection(
     )
     try:
         db.add(new_reflection)
-        db.commit()
-        db.refresh(new_reflection)
+        await db.commit()
+        await db.refresh(new_reflection)
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You have already logged a reflection for this date")
 
     return new_reflection

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from uuid import UUID
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core.security import hash_password
-from app.db.session import get_db
+from app.db.database import get_db
 from app.models.user import User
 from app.schema.user import UserCreate, UserResponse, UserLogin
 from app.core.security import (
@@ -17,7 +18,7 @@ router = APIRouter()
 
 
 @router.post("/users", response_model=UserResponse)
-def create_user(user: UserCreate, db:Session = Depends(get_db)):
+async def create_user(user: UserCreate, db:AsyncSession = Depends(get_db)):
 
     new_user = User(
         name=user.name,
@@ -26,17 +27,18 @@ def create_user(user: UserCreate, db:Session = Depends(get_db)):
     )
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
 
     return new_user
 
 @router.post("/auth/login")
-def login_user(
+async def login_user(
         user_credentials: OAuth2PasswordRequestForm = Depends(),
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
-    user = db.query(User).filter_by(email=user_credentials.username).first()
+    result = await db.execute(select(User).filter_by(email=user_credentials.username))
+    user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
@@ -66,20 +68,20 @@ def login_user(
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)
-def get_user(user_id: UUID, db:Session = Depends(get_db)):
+async def get_user(user_id: UUID, db:AsyncSession = Depends(get_db)):
 
-    user = db.query(User).filter(User.id == user_id).first()
-
+    result = await db.execute(select(User).filter_by(id=user_id))
+    user = result.scalar_one_or_none()
     return user
 
 @router.get("/auth/me")
-def get_me(
+async def get_me(
         current_user: User = Depends(get_current_user)
 ):
     return current_user
 
 @router.get("/protected")
-def protected_route(
+async def protected_route(
         current_user: User = Depends(get_current_user)
 ):
 

@@ -25,6 +25,7 @@ class TrackingMetric(Base):
     operator = Column(String, nullable=False, default=">=")  # e.g., ">=", "<=", "=="
     target_value = Column(Float, nullable=False)     # e.g., 4.0, 1.0 (for True), 2.0
 
+
     # Relationships
     commitment = relationship("Commitment", back_populates="metrics")
     logs = relationship(
