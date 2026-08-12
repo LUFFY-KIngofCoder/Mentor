@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: mentor-db
+    environment:
+      POSTGRES_USER: mentor_user
+      POSTGRES_PASSWORD: mentor_pass
+      POSTGRES_DB: mentor_db
+    volumes:
+      - mentor-db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: mentor-backend
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: mentor-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  mentor-db-data:
