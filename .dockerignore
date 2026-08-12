@@ -1,0 +1,13 @@
+# Python
+Backend/venv/
+Backend/__pycache__/
+Backend/*.pyc
+Backend/.env
+
+# Node
+frontend/node_modules/
+frontend/.next/
+
+# Git
+.git/
+*.sql
