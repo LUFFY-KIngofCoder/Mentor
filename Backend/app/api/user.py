@@ -67,7 +67,7 @@ async def login_user(
     }
 
 
-@router.get("/users/{user_id}", response_model=UserResponse)
+@router.get("/users/{user_id}", response_model=UserResponse | None)
 async def get_user(user_id: UUID, db:AsyncSession = Depends(get_db)):
 
     result = await db.execute(select(User).filter_by(id=user_id))
