@@ -31,3 +31,7 @@ app.include_router(analytics_router)
 @app.get("/")
 def root():
     return {"message": "Mentor Backend Running"} 
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
