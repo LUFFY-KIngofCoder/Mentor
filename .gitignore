@@ -27,3 +27,5 @@ build/
 
 #sql dumps
 *.sql
+pata nhi
+mentor-key.pem
