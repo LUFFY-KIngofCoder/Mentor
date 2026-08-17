@@ -25,4 +25,5 @@ node_modules/
 dist/
 build/
 
+#sql dumps
 *.sql
