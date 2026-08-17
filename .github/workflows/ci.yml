@@ -25,6 +25,9 @@ jobs:
           pip install -r Backend/requirements.txt
 
       - name: Run Pytest
+        env:
+          DATABASE_URL: "postgresql+asyncpg://dummy:dummy@localhost:5432/dummy"
+          SECRET_KEY: "dummy_secret_for_tests"
         run: |
           cd Backend
           pytest tests/ -v
@@ -38,7 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Backend Image
-        run: docker build -t mentor-backend -f docker/backend/Dockerfile
+        run: docker build -t mentor-backend -f docker/backend/Dockerfile .
       
       - name: Build Frontend Image
-        run: docker build -t mentor-frontend -f docker/frontend/Dockerfile
+        run: docker build -t mentor-frontend -f docker/frontend/Dockerfile .
