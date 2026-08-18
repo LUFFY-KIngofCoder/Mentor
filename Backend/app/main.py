@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+
 
 from app.api.user import router as user_router
 from app.api.commitment import router as commitment_router
@@ -25,13 +26,16 @@ app.add_middleware(
     
 )
 
-app.include_router(user_router)
-app.include_router(commitment_router)
-app.include_router(tracking_metric_router)
-app.include_router(daily_entry_router)
-app.include_router(missed_day_reflection_router)
-app.include_router(execution_log_router)
-app.include_router(analytics_router)
+api_router = APIRouter(prefix="/api")
+api_router.include_router(user_router)
+api_router.include_router(commitment_router)
+api_router.include_router(tracking_metric_router)
+api_router.include_router(daily_entry_router)
+api_router.include_router(missed_day_reflection_router)
+api_router.include_router(execution_log_router)
+api_router.include_router(analytics_router)
+
+app.include_router(api_router)
 
 @app.get("/")
 def root():
