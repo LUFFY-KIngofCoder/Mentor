@@ -26,7 +26,10 @@ app.add_middleware(
     
 )
 
+# Master API Router
 api_router = APIRouter(prefix="/api")
+
+# Sub-routers
 api_router.include_router(user_router)
 api_router.include_router(commitment_router)
 api_router.include_router(tracking_metric_router)
@@ -35,12 +38,13 @@ api_router.include_router(missed_day_reflection_router)
 api_router.include_router(execution_log_router)
 api_router.include_router(analytics_router)
 
-app.include_router(api_router)
-
-@app.get("/")
-def root():
-    return {"message": "Mentor Backend Running"} 
-
-@app.get("/health")
+# Health & Root info attached to /api
+@api_router.get("/")
+def api_root():
+    return {"message": "Mentor API v1.0"}
+@api_router.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+# Mount everything to the app
+app.include_router(api_router)
