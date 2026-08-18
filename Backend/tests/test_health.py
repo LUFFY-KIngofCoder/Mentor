@@ -4,15 +4,15 @@ from app.main import app
 client = TestClient(app)
 
 def test_root_endpoint():
-    response = client.get("/")
+    response = client.get("api/")
     assert response.status_code == 200
-    assert response.json() == {"message":"Mentor Backend Running"}
+    assert response.json() == {"message":"Mentor API v1.0"}
 
 def test_health_endpoint():
-    response = client.get("/health")
+    response = client.get("api/health")
     assert response.status_code == 200
     assert response.json() == {"status":"healthy"}
 
 def test_login_missing_credentials():
-    resposne = client.post("/auth/login", data={})
-    assert resposne.status_code == 422
+    response = client.post("api/auth/login", data={})
+    assert response.status_code == 422
