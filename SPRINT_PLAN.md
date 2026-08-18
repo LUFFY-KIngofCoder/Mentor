@@ -28,104 +28,53 @@ Build the analytics engine before touching infrastructure, so we have a working 
 
 ---
 
-## Phase 1: Async PostgreSQL (Week 1)
+## Phase 1: Async PostgreSQL (COMPLETED ✅)
 
 ### Goal
 Replace synchronous SQLAlchemy engine with `asyncpg` to allow FastAPI to handle thousands of concurrent requests without blocking.
 
-### Changes Required
-- Replace `psycopg2` with `asyncpg` in `requirements.txt`
-- Update `DATABASE_URL` in `.env` from `postgresql://` → `postgresql+asyncpg://`
-- Replace `create_engine` + `SessionLocal` in `app/db/session.py` with `create_async_engine` + `AsyncSession`
-- Update all API route functions from `def` → `async def`
-- Replace all `db.query(...)` calls with `await db.execute(select(...))`
-- Fix N+1 Problem on `com.metrics` → Use `selectinload(Commitment.metrics)` via `options()`
-
-### Key Imports
-```python
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-```
+### What Was Built
+- Replaced `psycopg2` with `asyncpg` across backend
+- Converted database session maker to `create_async_engine` + `AsyncSession`
+- Updated all API routes to `async def` with `await db.execute(select(...))`
+- Solved N+1 query problem using `selectinload(Commitment.metrics)`
 
 ---
 
-## Phase 2: Docker Containerization (Week 2)
+## Phase 2: Docker Containerization (COMPLETED ✅)
 
 ### Goal
-Package the entire application (FastAPI backend + Next.js frontend + PostgreSQL) into a reproducible, portable Docker environment so it runs identically on any machine or server.
+Package the application into reproducible Docker containers.
 
-### Files to Create
-- **`Backend/Dockerfile`** — Multi-stage build for the FastAPI app
-- **`frontend/Dockerfile`** — Multi-stage build for the Next.js app
-- **`docker-compose.yml`** (project root) — Orchestrates all 3 services: `db`, `backend`, `frontend`
-- **`.dockerignore`** files — Exclude `venv`, `node_modules`, `__pycache__` from builds
-
-### `docker-compose.yml` Service Architecture
-```
-db (postgres:16-alpine)
-  └── Persistent Volume: postgres_data
-backend (FastAPI / Uvicorn)
-  └── Depends on: db
-  └── Env: DATABASE_URL, SECRET_KEY
-frontend (Next.js)
-  └── Depends on: backend
-  └── Env: NEXT_PUBLIC_API_URL
-```
+### What Was Built
+- Multi-stage `Dockerfile` for FastAPI backend and optimized production Next.js frontend
+- `docker-compose.yml` orchestrating services, networks, and environments
+- Implemented build arguments (`ARG NEXT_PUBLIC_API_URL`) for Ahead-Of-Time frontend bundle optimization
 
 ---
 
-## Phase 3: CI/CD Pipeline (Week 3)
+## Phase 3: CI/CD Pipeline (COMPLETED ✅)
 
 ### Goal
-Automate testing and deployment using GitHub Actions. Every push to `main` automatically tests, builds Docker images, and pushes them to Docker Hub (registry).
+Automate testing and container image publishing on GitHub Actions.
 
-### Files to Create
-- **`.github/workflows/ci.yml`** — GitHub Actions pipeline
-
-### Pipeline Steps
-1. **Trigger**: On every `git push` to `main`
-2. **Test**: Run `pytest` against backend
-3. **Build**: `docker build` for both backend and frontend images
-4. **Push**: Push images to Docker Hub with the commit SHA as the tag
+### What Was Built
+- `.github/workflows/ci.yml` pipeline triggering on push to `main`
+- Automated test runs with `pytest`
+- Automated multi-platform Docker image build and push to Docker Hub with commit SHA tagging
 
 ---
 
-## Phase 4: AWS Cloud Deployment (Week 4)
+## Phase 4: AWS Cloud Deployment & RDS Gateway Architecture (COMPLETED ✅)
 
 ### Goal
-Deploy the Dockerized application to a live, publicly accessible AWS server — entirely on the **AWS Free Tier** at zero cost.
+Deploy the application live to AWS with dedicated database persistence and gateway routing.
 
-### AWS Services Used (All Free Tier)
-| Service | Usage | Free Tier Limit |
-|---|---|---|
-| **EC2** | 1x `t2.micro` Linux server to run Docker | 750 hrs/month |
-| **S3** | Object storage (for future file uploads) | 5 GB |
-| **Security Groups** | Firewall rules (allow ports 80, 443, 22) | Free |
-
-### Deployment Architecture
-```
-Internet → AWS Security Group (Firewall)
-         → EC2 t2.micro (Ubuntu 24.04)
-           └── Docker Compose
-               ├── Nginx (Reverse Proxy) → Port 80/443
-               ├── FastAPI Backend       → Internal Port 8000
-               ├── Next.js Frontend      → Internal Port 3000
-               └── PostgreSQL DB         → Internal Port 5432
-                   └── EBS Volume (Persistent Storage)
-```
-
-### Deployment Steps
-1. Create AWS account + IAM user with EC2 permissions
-2. Launch `t2.micro` EC2 instance with Ubuntu 24.04
-3. Configure Security Groups to allow HTTP (80), HTTPS (443), SSH (22)
-4. SSH into the instance and install Docker + Docker Compose
-5. Clone the GitHub repo onto the server
-6. Create production `.env` file on the server
-7. Run `docker compose up -d --build` to launch all services
-8. Configure a domain name (optional) and SSL via Let's Encrypt / Certbot
-
-> AWS Free Tier is available for 12 months for all new AWS accounts. The `t2.micro` instance is more than sufficient to run the entire Mentor stack.
+### What Was Built & Exceeded
+- **Compute:** EC2 instance running containerized microservices
+- **Managed Database:** Migrated from local container to dedicated **AWS RDS PostgreSQL** (`db.t4g.micro` in `ap-south-1`)
+- **Gateway Reverse Proxy:** Configured **Nginx** reverse proxy on port 80 routing `/` to Next.js and `/api`, `/docs` to FastAPI
+- **Security & Governance:** IAM Developer account configuration (`mentor-dev`), VPC Security Groups, and dynamic Alembic URL injection
 
 ---
 
