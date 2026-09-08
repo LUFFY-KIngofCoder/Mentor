@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
-
+from app.core.exceptions import AppException,app_exception_handler
 from app.api.user import router as user_router
 from app.api.commitment import router as commitment_router
 from app.api.daily_entry import router as daily_entry_router
@@ -11,6 +11,9 @@ from app.api.execution_log import router as execution_log_router
 from app.api.analytics import router as analytics_router
 
 app = FastAPI()
+
+# Exception Handler
+app.add_exception_handler(AppException, app_exception_handler)
 
 app.add_middleware(
     CORSMiddleware,

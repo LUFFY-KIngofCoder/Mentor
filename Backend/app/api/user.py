@@ -7,38 +7,39 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import hash_password
 from app.db.database import get_db
 from app.models.user import User
-from app.schema.user import UserCreate, UserResponse, UserLogin
+from app.schema.user import UserCreate, UserResponse
 from app.core.security import (
     verify_password,
     create_access_token,
 )
 from app.auth.oauth2 import get_current_user
+from app.core.dependencies import get_user_service
+from app.services.user_service import UserService
+
+
 
 router = APIRouter()
 
 
 @router.post("/users", response_model=UserResponse)
-async def create_user(user: UserCreate, db:AsyncSession = Depends(get_db)):
+async def create_user(user: UserCreate, user_service : UserService = Depends(get_user_service)):
 
-    new_user = User(
+
+    new_user =  await user_service.create_user(User(
         name=user.name,
         email=user.email,
         password_hash=hash_password(user.password)
-    )
-
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-
+    ))
+    
     return new_user
 
 @router.post("/auth/login")
 async def login_user(
         user_credentials: OAuth2PasswordRequestForm = Depends(),
-        db: AsyncSession = Depends(get_db)
+        user_service : UserService = Depends(get_user_service)
 ):
-    result = await db.execute(select(User).filter_by(email=user_credentials.username))
-    user = result.scalar_one_or_none()
+
+    user = await user_service.user_repo.get_by_email(user_credentials.username)
 
     if not user:
         raise HTTPException(
@@ -68,10 +69,9 @@ async def login_user(
 
 
 @router.get("/users/{user_id}", response_model=UserResponse | None)
-async def get_user(user_id: UUID, db:AsyncSession = Depends(get_db)):
+async def get_user(user_id: UUID, user_service : UserService = Depends(get_user_service)):
 
-    result = await db.execute(select(User).filter_by(id=user_id))
-    user = result.scalar_one_or_none()
+    user = await user_service.user_repo.get_by_id(user_id)
     return user
 
 @router.get("/auth/me")

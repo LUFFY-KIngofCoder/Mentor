@@ -1,3 +1,5 @@
+from app.core.dependencies import get_user_service
+from app.services.user_service import UserService
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +15,12 @@ ALGORITHM = settings.ALGORITHM
 
 
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/auth/login"
+    tokenUrl="/api/auth/login"
 )
 
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
-        db: AsyncSession = Depends(get_db)
+        user_service : UserService = Depends(get_user_service)
 ):
 
     credentials_exception = HTTPException(
@@ -41,8 +43,7 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    result = await db.execute(select(User).filter_by(id=user_id))
-    user = result.scalars().first()
+    user = await user_service.user_repo.get_by_id(user_id)
 
     if user is None:
         raise credentials_exception

@@ -1,92 +1,70 @@
-# Mentor: 30-Day Enterprise Sprint Plan
+# Phase 1: Advanced Backend Engineering - Implementation Plan
 
-Transform Mentor from a local dev project into a production-grade, containerized AI SaaS.
+This plan breaks down the comprehensive "Advanced Backend Engineering" requirements into a structured, sequential roadmap tailored specifically for the **Mentor** application. Our goal is to transform the Mentor backend from a "working" state into a deeply engineered, production-ready system. 
 
----
-
-## Phase 0: Analytics Baseline (COMPLETED ✅)
-
-### Goal
-Build the analytics engine before touching infrastructure, so we have a working feature to deploy.
-
-### What Was Built
-- **`is_successful` column** added to `MetricLog` via Alembic migration (with `server_default` fix)
-- **Write-Time Calculation**: `daily_entry.py` now evaluates and persists `is_successful` at the point of entry
-- **Helper Utility**: `app/utils/metric.py` → `evaluate_metric_success()` for reusable, testable logic
-- **Analytics Query**: `app/api/analytics.py` uses `GROUP BY` + `HAVING func.count() == required_metric_count` to correctly identify days where **all** required metrics were completed
-- **Streak Logic**: Walk backward from today (or yesterday) through the sorted `successful_dates` list
-- **Schema**: `app/schema/analytics.py` → `AnalyticMetrics` and `CommitmentAnalyticsResponse` Pydantic models
-- **Frontend**: Dynamic multi-metric creation in the New Commitment Modal (`page.tsx`)
-
-### Metrics Computed
-| Metric | Logic |
-|---|---|
-| `total_active_days` | `min((today - start_date).days + 1, duration_days)` |
-| `successful_days` | Days where ALL metrics were `is_successful == True` |
-| `consistency_score` | `(successful_days / total_active_days) * 100` |
-| `streak` | Consecutive successful days ending today or yesterday |
+> [!IMPORTANT]
+> **Core Philosophy**: 
+> 1. We prioritize **depth over speed**. We must be able to explain, test, break, and defend every design decision we make.
+> 2. **Testing is Continuous**: No feature in any epic is considered complete until its relevant tests exist.
 
 ---
 
-## Phase 1: Async PostgreSQL (COMPLETED ✅)
+## Detailed Epics Roadmap (Mentor Specific)
 
-### Goal
-Replace synchronous SQLAlchemy engine with `asyncpg` to allow FastAPI to handle thousands of concurrent requests without blocking.
+We will implement this directly into the `Mentor` codebase, step by step.
 
-### What Was Built
-- Replaced `psycopg2` with `asyncpg` across backend
-- Converted database session maker to `create_async_engine` + `AsyncSession`
-- Updated all API routes to `async def` with `await db.execute(select(...))`
-- Solved N+1 query problem using `selectinload(Commitment.metrics)`
+### Epic 1: Architectural Foundation (Service & Repositories)
+**Goal:** Stop writing SQL and business logic directly inside our FastAPI routers (`app/api/*.py`).
+*   **Action 1 (Exceptions):** Create `app/core/exceptions.py`. Define standard errors like `CommitmentNotFound`, `UnauthorizedAccess`, and a global FastAPI handler to return them as `{ "error": "CODE", "message": "..." }`.
+*   **Action 2 (Users & Auth):** Build `UserRepository` (handles SQLAlchemy) and `UserService` (handles password hashing). Refactor the `/api/users` and `/api/auth` routers.
+*   **Action 3 (Commitments & Analytics):** Build `CommitmentRepository` and `AnalyticsService`. Move the complex streak calculation logic out of the router and into the Service layer. Define strict transaction boundaries (when we `commit()`).
+*   **Action 4 (Tests):** Write unit tests for `AnalyticsService` and integration tests for `CommitmentRepository`.
 
----
+### Epic 2: Observability, Middleware & Lifecycle
+**Goal:** Know exactly what happens to a request from the moment it hits the server to the moment it leaves.
+*   **Action 1 (Request IDs):** Create a middleware that generates a unique `request_id` (UUID) for every incoming request (e.g., `POST /api/daily_entry`).
+*   **Action 2 (Structured Logging):** Replace `print()` with Python's `logging` configured to output JSON. Every log must include the `request_id`, HTTP method, endpoint, and execution time.
+*   **Action 3 (Timing):** Add a timing middleware to measure how long the streak calculation takes.
+*   **Action 4 (Lifecycle):** Configure FastAPI startup and shutdown events to cleanly open and close the PostgreSQL connection pools.
 
-## Phase 2: Docker Containerization (COMPLETED ✅)
+### Epic 3: Authorization & API Engineering
+**Goal:** Ensure a user can never touch another user's data, and build standard REST patterns.
+*   **Action 1 (Resource Ownership):** Enforce tenant isolation. A user fetching `GET /api/commitments/{id}` must prove they own that specific commitment, not just that they are logged in.
+*   **Action 2 (Pagination & Filtering):** Update `GET /api/commitments` to accept `?page=1&size=10&status=active`. 
+*   **Action 3 (Response Schemas):** Strictly type all outputs using Pydantic so we never accidentally leak password hashes or internal DB IDs.
 
-### Goal
-Package the application into reproducible Docker containers.
+### Epic 4: Database Performance & Async Mastery
+**Goal:** Prove our async database is actually fast by analyzing its execution.
+*   **Action 1 (Query Plans):** Use PostgreSQL `EXPLAIN ANALYZE` on our heaviest query (the Analytics streak calculation). 
+*   **Action 2 (Indexes):** Add composite indexes to `MetricLog.date` and `MetricLog.is_successful` via Alembic to speed up the streak query.
+*   **Action 3 (Async Concurrency):** Build a dashboard endpoint that fetches User Profile, Active Commitments, and Streak Analytics *concurrently* using `asyncio.gather()` rather than sequentially. Measure the speed difference.
 
-### What Was Built
-- Multi-stage `Dockerfile` for FastAPI backend and optimized production Next.js frontend
-- `docker-compose.yml` orchestrating services, networks, and environments
-- Implemented build arguments (`ARG NEXT_PUBLIC_API_URL`) for Ahead-Of-Time frontend bundle optimization
+### Epic 5: Redis Integration
+**Goal:** Introduce in-memory caching and abuse prevention.
+*   **Action 1 (Caching):** The Analytics streak calculation is heavy. When a user requests it, cache the result in Redis with a 1-hour TTL. Invalidate this cache immediately if the user logs a new `daily_entry`.
+*   **Action 2 (Rate Limiting):** Implement a Redis-backed token bucket rate limiter to restrict `/api/auth/login` to 5 requests per minute per IP to prevent brute-force attacks.
 
----
+### Epic 6: Background Jobs & Reliability
+**Goal:** Offload slow tasks from the main API thread and handle failures gracefully.
+*   **Action 1 (Task Queue):** Set up a Redis-backed background worker (e.g., Celery or ARQ).
+*   **Action 2 (The Job):** Create a background job to generate a "Weekly Progress Report" (mock email) for the user.
+*   **Action 3 (Retries & Dead-letters):** If the email service "fails", implement exponential backoff retries. If it fails 3 times, move the job to a "Dead-Letter Queue" for manual inspection.
+*   **Action 4 (Idempotency):** Implement an `Idempotency-Key` header for `POST /api/daily_entry` so a user with a laggy connection doesn't accidentally log the same day twice.
 
-## Phase 3: CI/CD Pipeline (COMPLETED ✅)
+### Epic 7: Testing & System Hardening
+**Goal:** Prove the system works and cannot be easily broken.
+*   **Action 1 (Fixtures):** Build Pytest fixtures that spin up an empty test PostgreSQL database and yield an authenticated test client.
+*   **Action 2 (Failure Testing):** Write tests that deliberately send bad tokens, request non-existent commitments, and try to edit other users' data, ensuring we get the exact `401`, `404`, and `403` JSON error contracts we defined in Epic 1.
+*   **Action 3 (Mocking):** Write a test for the Weekly Report background job that *mocks* the email sender so we don't actually send emails during tests.
 
-### Goal
-Automate testing and container image publishing on GitHub Actions.
-
-### What Was Built
-- `.github/workflows/ci.yml` pipeline triggering on push to `main`
-- Automated test runs with `pytest`
-- Automated multi-platform Docker image build and push to Docker Hub with commit SHA tagging
-
----
-
-## Phase 4: AWS Cloud Deployment & RDS Gateway Architecture (COMPLETED ✅)
-
-### Goal
-Deploy the application live to AWS with dedicated database persistence and gateway routing.
-
-### What Was Built & Exceeded
-- **Compute:** EC2 instance running containerized microservices
-- **Managed Database:** Migrated from local container to dedicated **AWS RDS PostgreSQL** (`db.t4g.micro` in `ap-south-1`)
-- **Gateway Reverse Proxy:** Configured **Nginx** reverse proxy on port 80 routing `/` to Next.js and `/api`, `/docs` to FastAPI
-- **Security & Governance:** IAM Developer account configuration (`mentor-dev`), VPC Security Groups, and dynamic Alembic URL injection
-
----
-
-## Architecture Overview
-
-```
-Commitment
-  └── 1:M TrackingMetric
-         └── 1:M MetricLog
-                └── is_successful: bool (Write-Time, computed in daily_entry.py)
-
-Analytics Query Flow:
-  MetricLog (is_successful=True) → GROUP BY date → HAVING count == required_metrics
-  → successful_dates[] → streak loop (walk backward from today)
-```
+### Epic 8: The Capstone - Bulk Import Pipeline
+**Goal:** A final exam feature that forces us to use everything we've learned.
+*   **The Feature:** Allow a user to upload a massive CSV file containing years of historical habit data.
+*   **The Flow:** 
+    1. `Auth` & `Authorization` check.
+    2. API immediately returns `202 Accepted` and offloads the file to a **Background Queue**.
+    3. The **Worker** parses the CSV.
+    4. Database inserts are wrapped in strict **Transactions** (if one row fails, rollback all).
+    5. The worker updates the user's **Redis Cache** when finished.
+    6. **Structured Logging** tracks the job's progress.
+    7. **Failure Scenarios to Test:** What happens if the worker crashes midway? What if the CSV has duplicate dates? What if the user hits the rate limit while uploading?
