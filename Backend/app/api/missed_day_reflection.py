@@ -1,6 +1,7 @@
+from app.core.exceptions import BadRequestException
 from sqlalchemy.exc import IntegrityError
 from app.schema.missed_day_reflection import MissedDayReflectionCreate, MissedDayReflectionResponse
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import timedelta, date
@@ -81,6 +82,6 @@ async def missed_day_reflection(
         await db.refresh(new_reflection)
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You have already logged a reflection for this date")
+        raise BadRequestException("You have already logged a reflection for this date")
 
     return new_reflection

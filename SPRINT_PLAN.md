@@ -13,24 +13,24 @@ This plan breaks down the comprehensive "Advanced Backend Engineering" requireme
 
 We will implement this directly into the `Mentor` codebase, step by step.
 
-### Epic 1: Architectural Foundation (Service & Repositories)
+### Epic 1: Architectural Foundation (Service & Repositories) ✅
 **Goal:** Stop writing SQL and business logic directly inside our FastAPI routers (`app/api/*.py`).
 *   **Action 1 (Exceptions):** Create `app/core/exceptions.py`. Define standard errors like `CommitmentNotFound`, `UnauthorizedAccess`, and a global FastAPI handler to return them as `{ "error": "CODE", "message": "..." }`.
 *   **Action 2 (Users & Auth):** Build `UserRepository` (handles SQLAlchemy) and `UserService` (handles password hashing). Refactor the `/api/users` and `/api/auth` routers.
 *   **Action 3 (Commitments & Analytics):** Build `CommitmentRepository` and `AnalyticsService`. Move the complex streak calculation logic out of the router and into the Service layer. Define strict transaction boundaries (when we `commit()`).
 *   **Action 4 (Tests):** Write unit tests for `AnalyticsService` and integration tests for `CommitmentRepository`.
 
-### Epic 2: Observability, Middleware & Lifecycle
-**Goal:** Know exactly what happens to a request from the moment it hits the server to the moment it leaves.
-*   **Action 1 (Request IDs):** Create a middleware that generates a unique `request_id` (UUID) for every incoming request (e.g., `POST /api/daily_entry`).
-*   **Action 2 (Structured Logging):** Replace `print()` with Python's `logging` configured to output JSON. Every log must include the `request_id`, HTTP method, endpoint, and execution time.
-*   **Action 3 (Timing):** Add a timing middleware to measure how long the streak calculation takes.
+### Epic 2: Observability, APM & Lifecycle ✅
+**Goal:** Know exactly what happens to a request from the moment it hits the server to the moment it leaves, and catch unhandled crashes automatically.
+*   **Action 1 (Sentry Integration):** Install and configure the Sentry SDK to automatically capture exceptions and performance traces (APM) in production.
+*   **Action 2 (Request IDs):** Create a middleware that generates a unique `request_id` (UUID) for every incoming request.
+*   **Action 3 (Structured Logging):** Replace `print()` with Python's `logging` configured to output JSON (for CloudWatch ingestion). Every log must include the `request_id`, HTTP method, endpoint, and execution time.
 *   **Action 4 (Lifecycle):** Configure FastAPI startup and shutdown events to cleanly open and close the PostgreSQL connection pools.
 
-### Epic 3: Authorization & API Engineering
+### Epic 3: Authorization & API Engineering ✅
 **Goal:** Ensure a user can never touch another user's data, and build standard REST patterns.
 *   **Action 1 (Resource Ownership):** Enforce tenant isolation. A user fetching `GET /api/commitments/{id}` must prove they own that specific commitment, not just that they are logged in.
-*   **Action 2 (Pagination & Filtering):** Update `GET /api/commitments` to accept `?page=1&size=10&status=active`. 
+*   **Action 2 (Pagination & Filtering):** Update `GET /api/commitments` to implement **Cursor Pagination** (`cursor` and `size`) for infinite scrolling, bypassing the slow `OFFSET` method.
 *   **Action 3 (Response Schemas):** Strictly type all outputs using Pydantic so we never accidentally leak password hashes or internal DB IDs.
 
 ### Epic 4: Database Performance & Async Mastery

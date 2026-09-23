@@ -1,3 +1,4 @@
+from app.core.exceptions import NotFoundException
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -71,10 +72,7 @@ async def create_or_update_daily_entry(
         tracking_metric = result3.scalar_one_or_none()
 
         if not tracking_metric:
-            raise HTTPException(
-                status_code = status.HTTP_404_NOT_FOUND,
-                detail = f"Tracking metric {custom_metric.metric_id} not found."
-            )
+            raise NotFoundException(f"Tracking metric {custom_metric.metric_id} not found.")
 
         is_successful = evaluate_metric_success(
             value = custom_metric.value,

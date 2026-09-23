@@ -11,7 +11,7 @@ async def app_exception_handler(request: Request,exc: AppException) -> JSONRespo
 
     return JSONResponse(status_code=exc.status_code,
                         content={"error_code": exc.error_code,
-                        "message": exc.message})        
+                        "message": exc.message})  
 
 class NotFoundException(AppException):
     def __init__(self, message:str, error_code: str = "NOT FOUND"):

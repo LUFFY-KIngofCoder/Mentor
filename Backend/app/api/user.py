@@ -39,33 +39,7 @@ async def login_user(
         user_service : UserService = Depends(get_user_service)
 ):
 
-    user = await user_service.user_repo.get_by_email(user_credentials.username)
-
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="The user does not exist.",
-        )
-
-    valid_password = verify_password(
-        user_credentials.password,
-        user.password_hash
-    )
-
-    if not valid_password:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid Credentials",
-        )
-
-    access_token = create_access_token(
-        data={"sub": str(user.id)}
-    )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    return await user_service.authenticate_user(user_credentials)
 
 
 @router.get("/users/{user_id}", response_model=UserResponse | None)

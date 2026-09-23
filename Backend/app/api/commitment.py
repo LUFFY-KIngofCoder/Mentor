@@ -1,8 +1,6 @@
-from fastapi import APIRouter , Depends
-from datetime import timedelta
+from fastapi import APIRouter , Depends, Query
+from datetime import timedelta, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from typing import List
 from uuid import UUID
 
@@ -12,9 +10,14 @@ from app.auth.oauth2 import get_current_user
 from app.models import Commitment , User
 from app.schema.commitment import (
     CommitmentCreate,
-    CommitmentResponse, CommitmentUpdate
+    CommitmentResponse, 
+    CommitmentUpdate
 )
-from app.utils.commitment import get_user_commitments
+from app.services.commitment_service import CommitmentService
+from app.core.dependencies import get_commitment_service
+from app.schema.commitment import PaginationResponse
+
+
 
 router = APIRouter(
     prefix = "/commitments",
@@ -24,101 +27,69 @@ router = APIRouter(
 @router.post("/", response_model=CommitmentResponse)
 async def create_commitment(
         commitment: CommitmentCreate,
-        db: AsyncSession = Depends(get_db),
+        commitment_service: CommitmentService = Depends(get_commitment_service),
         current_user: User = Depends(get_current_user)
                       ):
-    end_date = (
-        commitment.start_date + timedelta(days=commitment.duration_days)
-    )
-
+    
     new_commitment = Commitment(
         user_id=current_user.id,
         title=commitment.title,
         description=commitment.description,
         duration_days=commitment.duration_days,
         start_date=commitment.start_date,
-        end_date=end_date
     )
 
-    db.add(new_commitment)
-    await db.commit()
-    await db.refresh(new_commitment)
+    return await commitment_service.create_commitment(new_commitment)
 
-    return new_commitment
-
-@router.get("/", response_model=List[CommitmentResponse])
+@router.get("/", response_model=PaginationResponse[CommitmentResponse])
 async def get_commitments(
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        cursor: datetime | None = Query(None, description="Cursor for infinite scrolling"),
+        limit: int = Query(10, ge=1, le=50, description="Items per page"),
+        status: str | None = Query(None, description="Filter by status (active, completed)"),
+        current_user: User = Depends(get_current_user),
+        commitment_service: CommitmentService = Depends(get_commitment_service)
 ):
-    result = await db.execute(select(Commitment).filter(Commitment.user_id == current_user.id))
-    commitments = result.scalars().all()
-    return commitments
+
+    commitments, next_cursor = await commitment_service.get_user_commitments(
+        current_user.id, limit=limit, cursor=cursor, status=status
+    )
+    
+    return PaginationResponse(
+        items=commitments,
+        size=len(commitments),
+        next_cursor=next_cursor
+    )
 
 
 @router.get("/{commitment_id}", response_model=CommitmentResponse)
 async def get_commitment(
         commitment_id: UUID,
-        db: AsyncSession = Depends(get_db),
+        commitment_service: CommitmentService = Depends(get_commitment_service),
         current_user: User = Depends(get_current_user)
 ):
 
-    commitment = await get_user_commitments(
-        commitment_id,
-        current_user,
-        db
-    )
+    return await commitment_service.get_user_commitment(commitment_id,current_user.id)
 
-    return commitment
 
 @router.patch("/{commitment_id}", response_model=CommitmentResponse)
 async def update_commitment(
         commitment_id: UUID,
         commitment_update: CommitmentUpdate,
 
-        db: AsyncSession = Depends(get_db),
+        commitment_service: CommitmentService = Depends(get_commitment_service),
 
         current_user: User = Depends(get_current_user)
 ):
-
-    commitment = await get_user_commitments(
-        commitment_id,
-        current_user,
-        db
-    )
-
-    update_data = commitment_update.model_dump(
-        exclude_unset=True
-    )
-
-    for key, value in update_data.items():
-        setattr(commitment, key, value)
-
-    if (
-        "start_date" in update_data
-        or "duration_days" in update_data
-    ):
-        commitment.end_date = commitment.start_date + timedelta(days=commitment.duration_days)
-
-    await db.commit()
-    await db.refresh(commitment)
-
-    return commitment
+    return await commitment_service.update_commitment(
+        commitment_id,commitment_update,current_user.id)
 
 @router.delete("/{commitment_id}")
 async def delete_commitment(
         commitment_id: UUID,
-        db: AsyncSession = Depends(get_db),
+        commitment_service: CommitmentService = Depends(get_commitment_service),
         current_user: User = Depends(get_current_user)
 ):
-    commitment = await get_user_commitments(
+    return await commitment_service.delete_commitment(
         commitment_id,
-        current_user,
-        db
+        current_user.id
     )
-    await db.delete(commitment)
-    await db.commit()
-
-    return {
-        "message": "Commitment deleted successfully"
-    }

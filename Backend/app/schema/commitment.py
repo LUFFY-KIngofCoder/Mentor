@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from datetime import date
 from uuid import UUID
 from datetime import datetime
+from typing import Generic, TypeVar, List
 
 class CommitmentCreate(BaseModel):
     title: str
@@ -37,3 +38,11 @@ class CommitmentUpdate(BaseModel):
     duration_days: int | None = None
 
     start_date: date | None = None
+
+
+T = TypeVar('T')
+
+class PaginationResponse(BaseModel, Generic[T]):
+    items: List[T]
+    size: int
+    next_cursor: datetime | None = None

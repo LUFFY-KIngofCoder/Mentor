@@ -1,3 +1,6 @@
+from app.core.security import verify_password
+from fastapi import HTTPException
+from app.core.security import create_access_token
 from app.repositories.user_repository import UserRepository
 from app.schema.user import UserCreate
 from app.models.user import User
@@ -19,4 +22,34 @@ class UserService:
         
         return result
 
+    async def authenticate_user(self, credentials) -> dict:
         
+        user = await self.user_repo.get_by_email(credentials.username)
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="The user does not exist.",
+            )
+
+        valid_password = verify_password(
+            credentials.password,
+            user.password_hash
+        )
+
+        if not valid_password:
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid Credentials",
+            )
+
+        access_token = create_access_token(
+            data={"sub": str(user.id)}
+        )
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+
+            

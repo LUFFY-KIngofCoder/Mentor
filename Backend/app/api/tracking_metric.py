@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from app.models.commitment import Commitment
-from fastapi import APIRouter, Depends, HTTPException , status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
@@ -9,6 +9,7 @@ from app.db.database import get_db
 from app.auth.oauth2 import get_current_user
 from app.models import User, TrackingMetric
 from app.schema.tracking_metric import TrackingMetricCreate, TrackingMetricResponse
+from app.core.exceptions import NotFoundException
 
 router = APIRouter(
     prefix="/commitments/{commitment_id}/metrics",
@@ -24,8 +25,7 @@ async def get_user_commitment(
     result = await db.execute(select(Commitment).filter_by(id=commitment_id, user_id=current_user.id))
     commitment = result.scalar_one_or_none()
     if not commitment:
-        raise HTTPException(status_code=404,
-        detail="Commitment not found")
+        raise NotFoundException(message="Commitment not found")
 
     return commitment
 
