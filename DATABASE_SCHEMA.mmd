@@ -1,0 +1,78 @@
+erDiagram
+    users {
+        UUID id PK
+        String name
+        String email UK
+        String password_hash
+        Integer day_reset_hour
+        DateTime created_at
+        DateTime updated_at
+    }
+
+    commitments {
+        UUID id PK
+        UUID user_id FK
+        String title
+        String description
+        Integer duration_days
+        Date start_date
+        Date end_date
+        String status
+        DateTime created_at
+        DateTime updated_at
+    }
+
+    daily_entries {
+        UUID id PK
+        UUID user_id FK
+        Date date UK
+        Float sleep_hours
+        Float deep_work_hours
+        Float distraction_hours
+        Integer mood_score
+        Integer energy_score
+        String journal_entry
+        String what_avoided
+        String biggest_win
+        String biggest_failure
+        String what_can_be_different
+        DateTime created_at
+        DateTime updated_at
+    }
+
+    tracking_metrics {
+        UUID id PK
+        UUID commitment_id FK
+        String name
+        String metric_type
+        String operator
+        Float target_value
+    }
+
+    metric_logs {
+        UUID id PK
+        UUID daily_entry_id FK
+        UUID metric_id FK
+        Float value
+        Boolean is_successful
+        DateTime created_at
+    }
+
+    missed_day_reflections {
+        UUID id PK
+        UUID user_id FK
+        Date missed_date UK
+        String reason
+        String reflection
+        DateTime created_at
+        DateTime updated_at
+    }
+
+    users ||--o{ commitments : "has"
+    users ||--o{ daily_entries : "has"
+    users ||--o{ missed_day_reflections : "has"
+    
+    commitments ||--o{ tracking_metrics : "defines"
+    
+    daily_entries ||--o{ metric_logs : "records"
+    tracking_metrics ||--o{ metric_logs : "measured in"
