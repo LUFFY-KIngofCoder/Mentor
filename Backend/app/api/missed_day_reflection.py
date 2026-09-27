@@ -28,39 +28,41 @@ async def get_unresolved_missed_days(
     behavioral_yesterday = (behavioral_today_datetime-timedelta(days=1)).date()
 
     # 2. Get the very first commitment start date
-    result = await db.execute(select(Commitment).filter(Commitment.user_id==current_user.id).order_by(Commitment.start_date.asc()))
+    result = await db.execute(select(Commitment).filter(Commitment.user_id==current_user.id, Commitment.status=="active").order_by(Commitment.start_date.asc()))
     first_commitment = result.scalar_one_or_none()
 
     if not first_commitment or first_commitment.start_date > behavioral_yesterday:
         return [] # No commitments, or they just started today
 
-    start_date = first_commitment.start_date
+    # start_date = first_commitment.start_date
 
     # --- YOUR TURN: BUILD THE ALGORITHM ---
 
     # Step 3: Generate expected_dates set from start_date to behavioral_yesterday (inclusive)
-    expected_dates = {start_date+timedelta(days=i) for i in range((behavioral_yesterday-start_date).days+1)}
+    # expected_dates = {start_date+timedelta(days=i) for i in range((behavioral_yesterday-start_date).days+1)}
     
     # Step 4: Run 1 query to get all dates from DailyEntry for this user
     result_daily = await db.execute(select(DailyEntry.date).filter(
         DailyEntry.user_id == current_user.id
-        ))
-    daily_entry_dates = {row[0] for row in result_daily.all()}
+        ).order_by(DailyEntry.date.desc()).limit(1))
+    last_daily_entry_dates = result_daily.scalar_one_or_none()
 
     # Step 5: Run 1 query to get all missed_dates from MissedDayReflection for this user
     result_missed = await db.execute(select(MissedDayReflection.missed_date).filter(
         MissedDayReflection.user_id == current_user.id
-        ))
-    missed_day_dates = {row[0] for row in result_missed.all()}
+        ).order_by(MissedDayReflection.missed_date.desc()).limit(1))
+    last_missed_day_dates = result_missed.scalar_one_or_none()
     
     # Step 6: Combine them into logged_dates set
-    logged_dates = daily_entry_dates | missed_day_dates
+    last_logged_date = max(last_daily_entry_dates, last_missed_day_dates) if (last_missed_day_dates!=None and last_daily_entry_dates!=None) else last_daily_entry_dates or last_missed_day_dates
     
     # Step 7: missing_dates = expected_dates - logged_dates
 
-    missing_dates = list(expected_dates - logged_dates)
+    # missing_dates = list(expected_dates - logged_dates)
 
-    return sorted(missing_dates)
+    missing_dates = [behavioral_yesterday] if ((not last_logged_date) or (last_logged_date < behavioral_yesterday)) else []
+
+    return missing_dates
 
 
 @router.post("/", response_model = MissedDayReflectionResponse)

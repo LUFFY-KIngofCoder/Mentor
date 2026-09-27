@@ -123,18 +123,19 @@ export default function Dashboard() {
       setEntries(entriesRes.data);
 
       const commsRes = await api.get("/commitments/");
-      setCommitments(commsRes.data);
+      setCommitments(commsRes.data.items);
 
       const allMetrics = [];
-      for (const comm of commsRes.data) {
+      for (const comm of commsRes.data.items) {
         const metricsRes = await api.get(`/commitments/${comm.id}/metrics/`);
         allMetrics.push(...metricsRes.data);
       }
       setMetrics(allMetrics);
 
-      const analyticsRes = await api.get("/analytics/");
+      const analyticsRes = await api.get("/analytics/streak");
       setAnalytics(analyticsRes.data);
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Dashboard Fetch Error:", err?.response?.data || err);
       handleLogout();
     }
   };
