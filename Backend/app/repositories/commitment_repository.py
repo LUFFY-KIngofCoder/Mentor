@@ -1,3 +1,4 @@
+from app.models import TrackingMetric
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
@@ -56,4 +57,11 @@ class CommitmentRepository:
         return {
             "message": "Commitment deleted successfully"
         }
+
+    async def get_tracking_metric_by_id(self, tracking_metric_id: UUID, current_user_id: UUID) -> TrackingMetric | None:
+        result = await self.db.execute(select(TrackingMetric).where(TrackingMetric.id == tracking_metric_id, Commitment.user_id == current_user_id).join(Commitment, Commitment.id == TrackingMetric.commitment_id))
+        return result.scalar_one_or_none()
     
+    async def get_oldest_active_commitment(self, user_id: UUID) -> Commitment | None:
+        result = await self.db.execute(select(Commitment).filter(Commitment.user_id==user_id, Commitment.status=="active").order_by(Commitment.start_date.asc()).limit(1))
+        return result.scalar_one_or_none()

@@ -13,9 +13,11 @@ from app.api.tracking_metric import router as tracking_metric_router
 from app.api.missed_day_reflection import router as missed_day_reflection_router
 from app.api.execution_log import router as execution_log_router
 from app.api.analytics import router as analytics_router
+from app.api.dashboard import router as dashboard_router
 from app.core.config import settings
 from app.core.logger import request_id_var, logger
 from app.db.database import engine
+
 
 sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
@@ -86,6 +88,7 @@ api_router.include_router(daily_entry_router)
 api_router.include_router(missed_day_reflection_router)
 api_router.include_router(execution_log_router)
 api_router.include_router(analytics_router)
+api_router.include_router(dashboard_router)
 
 # Health & Root info attached to /api
 @api_router.get("/")

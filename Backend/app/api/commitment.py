@@ -1,12 +1,8 @@
 from fastapi import APIRouter , Depends, Query
-from datetime import timedelta, datetime
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from datetime import datetime
 from uuid import UUID
 
-from app.db.database import get_db
 from app.auth.oauth2 import get_current_user
-
 from app.models import Commitment , User
 from app.schema.commitment import (
     CommitmentCreate,

@@ -17,13 +17,13 @@ const EyeClosed = () => (
 
 export default function Dashboard() {
   const [token, setToken] = useState<string | null>(null);
-  
+
   // Data States
   const [entries, setEntries] = useState<any[]>([]);
   const [commitments, setCommitments] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any[]>([]);
-  
+
   // Auth States
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -34,14 +34,15 @@ export default function Dashboard() {
 
   // UI States
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   const [isNewCommitmentOpen, setIsNewCommitmentOpen] = useState(false);
-  
+
   // Missed Day Reflection States
   const [unresolvedMissedDates, setUnresolvedMissedDates] = useState<string[]>([]);
   const [missedReason, setMissedReason] = useState("");
   const [missedReflectionText, setMissedReflectionText] = useState("");
   const [isSubmittingMissed, setIsSubmittingMissed] = useState(false);
-  
+
   const getLocalDateString = () => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -79,6 +80,35 @@ export default function Dashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    if (isCheckInOpen && formDate && token) {
+      const fetchDateEntry = async () => {
+        try {
+          const res = await api.get(`/daily-entries/date?date=${formDate}`);
+          if (res.data) {
+            setSleep(res.data.sleep_hours ?? "");
+            setDeepWork(res.data.deep_work_hours ?? "");
+            setDistraction(res.data.distraction_hours ?? "");
+            setMood(res.data.mood_score ?? "");
+            setEnergy(res.data.energy_score ?? "");
+            setJournal(res.data.journal_entry || "");
+            setWhatAvoided(res.data.what_avoided || "");
+            setBiggestWin(res.data.biggest_win || "");
+            setBiggestFailure(res.data.biggest_failure || "");
+            setWhatCanBeDifferent(res.data.what_can_be_different || "");
+          } else {
+            setSleep(""); setDeepWork(""); setDistraction(""); setMood(""); setEnergy("");
+            setJournal(""); setWhatAvoided(""); setBiggestWin(""); setBiggestFailure(""); setWhatCanBeDifferent("");
+          }
+        } catch (err) {
+          setSleep(""); setDeepWork(""); setDistraction(""); setMood(""); setEnergy("");
+          setJournal(""); setWhatAvoided(""); setBiggestWin(""); setBiggestFailure(""); setWhatCanBeDifferent("");
+        }
+      };
+      fetchDateEntry();
+    }
+  }, [formDate, isCheckInOpen, token]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -93,7 +123,7 @@ export default function Dashboard() {
       const res = await api.post("/auth/login", formData, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" }
       });
-      
+
       const newToken = res.data.access_token;
       localStorage.setItem("token", newToken);
       setToken(newToken);
@@ -163,21 +193,21 @@ export default function Dashboard() {
         reason: missedReason,
         reflection: missedReflectionText
       });
-      
+
       const newDates = unresolvedMissedDates.slice(1);
       setUnresolvedMissedDates(newDates);
       setMissedReason("");
       setMissedReflectionText("");
-      
+
       if (newDates.length === 0) {
-         fetchDashboardData();
+        fetchDashboardData();
       }
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Failed to submit reflection.";
       alert(msg);
       // If it's a 400 about already existing, refresh data
       if (msg.includes("already")) {
-          fetchDashboardData();
+        fetchDashboardData();
       }
     } finally {
       setIsSubmittingMissed(false);
@@ -200,7 +230,10 @@ export default function Dashboard() {
         biggest_failure: biggestFailure || null,
         what_can_be_different: whatCanBeDifferent || null,
         custom_metrics: []
+      }, {
+        headers: { "Idempotency-Key": idempotencyKey }
       });
+      setIdempotencyKey(crypto.randomUUID());
       setIsCheckInOpen(false);
       setJournal(""); setWhatAvoided(""); setBiggestWin(""); setBiggestFailure(""); setWhatCanBeDifferent("");
       setSleep(""); setDeepWork(""); setDistraction(""); setMood(""); setEnergy("");
@@ -219,7 +252,7 @@ export default function Dashboard() {
         duration_days: Number(commDuration),
         start_date: commStartDate
       });
-      
+
       const newCommId = commRes.data.id;
 
       await Promise.all(
@@ -235,7 +268,7 @@ export default function Dashboard() {
       );
 
       setIsNewCommitmentOpen(false);
-      setCommTitle(""); setCommDescription(""); setCommDuration(""); 
+      setCommTitle(""); setCommDescription(""); setCommDuration("");
       setMetricsList([{ name: "", metricType: "boolean", metricOperator: ">=", metricTarget: "" }]);
       fetchDashboardData();
     } catch (err) {
@@ -287,7 +320,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-black text-neutral-100 font-sans selection:bg-blue-500/30 flex flex-col md:flex-row">
-      
+
       {/* ---------------------------------------------------------
           LEFT PANEL: EXECUTION (25%)
       --------------------------------------------------------- */}
@@ -306,7 +339,7 @@ export default function Dashboard() {
               {commitments.map(comm => {
                 const commMetrics = metrics.filter(m => m.commitment_id === comm.id);
                 const isFuture = comm.start_date > getLocalDateString();
-                
+
                 return (
                   <div key={comm.id} className={`relative ${isFuture ? 'opacity-50 grayscale' : ''}`}>
                     <div className="mb-3 flex justify-between items-start">
@@ -334,7 +367,7 @@ export default function Dashboard() {
                                 <div className="w-12 h-6 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                               </label>
                             ) : (
-                              <input type="number" disabled={isFuture} placeholder="0" className={`w-16 bg-black border border-neutral-800 p-2 rounded-lg text-white text-center text-sm outline-none focus:border-blue-500 transition-colors ${isFuture ? 'cursor-not-allowed opacity-50' : ''}`} value={quickMetricValues[metric.id] || ""} onBlur={(e) => { if (e.target.value !== "") autoSaveMetric(metric.id, Number(e.target.value)) }} onChange={(e) => setQuickMetricValues({...quickMetricValues, [metric.id]: Number(e.target.value)})} />
+                              <input type="number" disabled={isFuture} placeholder="0" className={`w-16 bg-black border border-neutral-800 p-2 rounded-lg text-white text-center text-sm outline-none focus:border-blue-500 transition-colors ${isFuture ? 'cursor-not-allowed opacity-50' : ''}`} value={quickMetricValues[metric.id] || ""} onBlur={(e) => { if (e.target.value !== "") autoSaveMetric(metric.id, Number(e.target.value)) }} onChange={(e) => setQuickMetricValues({ ...quickMetricValues, [metric.id]: Number(e.target.value) })} />
                             )}
                           </div>
                         ))
@@ -351,7 +384,10 @@ export default function Dashboard() {
           <button onClick={() => setIsNewCommitmentOpen(true)} className="w-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-bold py-3.5 rounded-xl transition-all active:scale-95 text-sm">
             + New Commitment
           </button>
-          <button onClick={() => setIsCheckInOpen(true)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.2)] active:scale-95 text-sm">
+          <button onClick={() => {
+            if (!idempotencyKey) setIdempotencyKey(crypto.randomUUID());
+            setIsCheckInOpen(true);
+          }} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.2)] active:scale-95 text-sm">
             + Evening Reflection
           </button>
         </div>
@@ -430,7 +466,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid gap-6">
-              {entries.map((entry) => 
+              {entries.map((entry) =>
                 entry.type === "missed_day" ? (
                   <div key={entry.id || entry.date} className="group bg-red-950/20 border border-red-900/50 p-6 sm:p-8 rounded-3xl flex flex-col gap-4 hover:border-red-900 transition-all">
                     <div className="flex justify-between items-center border-b border-red-900/30 pb-4">
@@ -439,7 +475,7 @@ export default function Dashboard() {
                         MISSED DAY
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {entry.reason && (
                         <div className="bg-black/30 p-4 rounded-2xl border border-red-900/20 md:col-span-2">
@@ -456,41 +492,41 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ) : (
-                <div key={entry.id || entry.date} className="group bg-neutral-900/30 border border-neutral-800/50 p-6 sm:p-8 rounded-3xl flex flex-col gap-6 hover:border-neutral-700/80 transition-all">
-                  <div className="flex justify-between items-center border-b border-neutral-800/50 pb-4">
-                    <h2 className="text-2xl font-bold text-white tracking-tight">{new Date(entry.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
-                    {entry.energy_score !== null && (
-                      <div className="bg-black border border-neutral-800 px-4 py-2 rounded-xl flex items-center gap-2">
-                        <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Energy</span>
-                        <span className="text-lg font-black text-blue-400">{entry.energy_score}</span>
+                  <div key={entry.id || entry.date} className="group bg-neutral-900/30 border border-neutral-800/50 p-6 sm:p-8 rounded-3xl flex flex-col gap-6 hover:border-neutral-700/80 transition-all">
+                    <div className="flex justify-between items-center border-b border-neutral-800/50 pb-4">
+                      <h2 className="text-2xl font-bold text-white tracking-tight">{new Date(entry.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
+                      {entry.energy_score !== null && (
+                        <div className="bg-black border border-neutral-800 px-4 py-2 rounded-xl flex items-center gap-2">
+                          <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Energy</span>
+                          <span className="text-lg font-black text-blue-400">{entry.energy_score}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {(entry.journal_entry || entry.biggest_win || entry.biggest_failure || entry.what_avoided || entry.what_can_be_different) && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {entry.biggest_win && <div className="bg-black/30 p-4 rounded-2xl border border-green-900/20"><p className="text-[10px] font-bold text-green-500/70 uppercase tracking-widest mb-1">Biggest Win</p><p className="text-sm text-neutral-300">{entry.biggest_win}</p></div>}
+                        {entry.biggest_failure && <div className="bg-black/30 p-4 rounded-2xl border border-red-900/20"><p className="text-[10px] font-bold text-red-500/70 uppercase tracking-widest mb-1">Failure / Friction</p><p className="text-sm text-neutral-300">{entry.biggest_failure}</p></div>}
+                        {entry.what_avoided && <div className="bg-black/30 p-4 rounded-2xl border border-neutral-800/50"><p className="text-[10px] font-bold text-purple-500/70 uppercase tracking-widest mb-1">Avoided</p><p className="text-sm text-neutral-300">{entry.what_avoided}</p></div>}
+                        {entry.what_can_be_different && <div className="bg-black/30 p-4 rounded-2xl border border-neutral-800/50 md:col-span-2"><p className="text-[10px] font-bold text-yellow-500/70 uppercase tracking-widest mb-1">Strategy for Tomorrow</p><p className="text-sm text-neutral-300">{entry.what_can_be_different}</p></div>}
+                        {entry.journal_entry && <div className="bg-black/30 p-4 rounded-2xl border border-neutral-800/50 md:col-span-2"><p className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest mb-1">Journal</p><p className="text-sm text-neutral-300 font-serif italic">"{entry.journal_entry}"</p></div>}
                       </div>
                     )}
-                  </div>
-                  
-                  {(entry.journal_entry || entry.biggest_win || entry.biggest_failure || entry.what_avoided || entry.what_can_be_different) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {entry.biggest_win && <div className="bg-black/30 p-4 rounded-2xl border border-green-900/20"><p className="text-[10px] font-bold text-green-500/70 uppercase tracking-widest mb-1">Biggest Win</p><p className="text-sm text-neutral-300">{entry.biggest_win}</p></div>}
-                      {entry.biggest_failure && <div className="bg-black/30 p-4 rounded-2xl border border-red-900/20"><p className="text-[10px] font-bold text-red-500/70 uppercase tracking-widest mb-1">Failure / Friction</p><p className="text-sm text-neutral-300">{entry.biggest_failure}</p></div>}
-                      {entry.what_avoided && <div className="bg-black/30 p-4 rounded-2xl border border-neutral-800/50"><p className="text-[10px] font-bold text-purple-500/70 uppercase tracking-widest mb-1">Avoided</p><p className="text-sm text-neutral-300">{entry.what_avoided}</p></div>}
-                      {entry.what_can_be_different && <div className="bg-black/30 p-4 rounded-2xl border border-neutral-800/50 md:col-span-2"><p className="text-[10px] font-bold text-yellow-500/70 uppercase tracking-widest mb-1">Strategy for Tomorrow</p><p className="text-sm text-neutral-300">{entry.what_can_be_different}</p></div>}
-                      {entry.journal_entry && <div className="bg-black/30 p-4 rounded-2xl border border-neutral-800/50 md:col-span-2"><p className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest mb-1">Journal</p><p className="text-sm text-neutral-300 font-serif italic">"{entry.journal_entry}"</p></div>}
-                    </div>
-                  )}
 
-                  <div className="flex flex-wrap gap-4 mt-2">
-                    <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-neutral-600 uppercase">Sleep</span><span className="font-mono text-sm text-white bg-neutral-900 px-2 py-1 rounded">{entry.sleep_hours ?? '-'}h</span></div>
-                    <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-neutral-600 uppercase">Deep Work</span><span className="font-mono text-sm text-white bg-neutral-900 px-2 py-1 rounded">{entry.deep_work_hours ?? '-'}h</span></div>
-                    <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-neutral-600 uppercase">Mood</span><span className="font-mono text-sm text-white bg-neutral-900 px-2 py-1 rounded">{entry.mood_score ?? '-'}</span></div>
-                    {entry.metric_logs && entry.metric_logs.length > 0 && (
-                      <><div className="w-px h-6 bg-neutral-800 mx-2 hidden sm:block"></div>
-                        {entry.metric_logs.map((log: any) => {
-                          const mDef = metrics.find(m => m.id === log.metric_id);
-                          return <div key={log.id} className="flex items-center gap-1.5 border border-blue-900/30 bg-blue-900/10 px-2.5 py-1 rounded-md"><span className="text-[10px] font-bold text-blue-400 uppercase">{mDef?.name || 'Metric'}</span><span className="font-mono text-xs text-blue-200">{log.value}</span></div>;
-                        })}
-                      </>
-                    )}
+                    <div className="flex flex-wrap gap-4 mt-2">
+                      <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-neutral-600 uppercase">Sleep</span><span className="font-mono text-sm text-white bg-neutral-900 px-2 py-1 rounded">{entry.sleep_hours ?? '-'}h</span></div>
+                      <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-neutral-600 uppercase">Deep Work</span><span className="font-mono text-sm text-white bg-neutral-900 px-2 py-1 rounded">{entry.deep_work_hours ?? '-'}h</span></div>
+                      <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-neutral-600 uppercase">Mood</span><span className="font-mono text-sm text-white bg-neutral-900 px-2 py-1 rounded">{entry.mood_score ?? '-'}</span></div>
+                      {entry.metric_logs && entry.metric_logs.length > 0 && (
+                        <><div className="w-px h-6 bg-neutral-800 mx-2 hidden sm:block"></div>
+                          {entry.metric_logs.map((log: any) => {
+                            const mDef = metrics.find(m => m.id === log.metric_id);
+                            return <div key={log.id} className="flex items-center gap-1.5 border border-blue-900/30 bg-blue-900/10 px-2.5 py-1 rounded-md"><span className="text-[10px] font-bold text-blue-400 uppercase">{mDef?.name || 'Metric'}</span><span className="font-mono text-xs text-blue-200">{log.value}</span></div>;
+                          })}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
                 )
               )}
             </div>
@@ -515,22 +551,22 @@ export default function Dashboard() {
                 {unresolvedMissedDates.length} Pending
               </div>
             </div>
-            
+
             <form onSubmit={submitMissedDayReflection} className="p-5 sm:p-8 flex flex-col gap-6 overflow-y-auto">
               <p className="text-neutral-400 text-sm leading-relaxed border-l-2 border-red-500/50 pl-4 italic">
                 Mentor enforces accountability. You cannot access your dashboard until you confront why you slipped. Honest reflections only.
               </p>
-              
+
               <div>
                 <label className="text-xs font-bold text-red-500/80 uppercase tracking-wider mb-1.5 block">What was the reason?</label>
                 <input type="text" required placeholder="e.g., Burnout, bad planning, distraction..." className="w-full bg-black border border-red-900/30 p-4 rounded-xl text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 text-sm transition-all" value={missedReason} onChange={e => setMissedReason(e.target.value)} />
               </div>
-              
+
               <div>
                 <label className="text-xs font-bold text-red-500/80 uppercase tracking-wider mb-1.5 block">Deep Reflection</label>
                 <textarea rows={4} required className="w-full bg-black border border-red-900/30 p-4 rounded-xl text-white outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 resize-none font-serif text-sm leading-relaxed transition-all" value={missedReflectionText} onChange={e => setMissedReflectionText(e.target.value)} placeholder="Why did this happen? What is the root cause? How do you guarantee it won't happen tomorrow?"></textarea>
               </div>
-              
+
               <div className="pt-2 mt-auto">
                 <button type="submit" disabled={isSubmittingMissed} className="w-full bg-red-600 hover:bg-red-500 text-white font-black text-base py-4 rounded-xl transition-all shadow-[0_0_30px_rgba(220,38,38,0.3)] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
                   {isSubmittingMissed ? "Submitting..." : "Submit Reflection to Unlock"}
@@ -547,7 +583,7 @@ export default function Dashboard() {
       {isNewCommitmentOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6" onClick={(e) => { if (e.target === e.currentTarget) setIsNewCommitmentOpen(false); }}>
           <div className="bg-neutral-950 border border-neutral-800 w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-            
+
             <div className="bg-neutral-900/50 p-5 sm:px-8 sm:py-6 border-b border-neutral-800 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-xl sm:text-2xl font-black text-white">Create Protocol</h2>
@@ -557,7 +593,7 @@ export default function Dashboard() {
             </div>
 
             <form onSubmit={submitNewCommitment} className="p-5 sm:p-8 flex flex-col gap-8 overflow-y-auto">
-              
+
               <div>
                 <h3 className="text-sm font-bold text-white mb-4 border-b border-neutral-800 pb-2">Core Commitment</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -587,7 +623,7 @@ export default function Dashboard() {
                     + Add Metric
                   </button>
                 </div>
-                
+
                 <div className="flex flex-col gap-3">
                   {metricsList.map((metric, idx) => (
                     <div key={idx} className="bg-neutral-900/40 p-4 rounded-xl border border-neutral-800/50 flex flex-wrap gap-4 items-start relative pr-10">
@@ -596,7 +632,7 @@ export default function Dashboard() {
                           ✕
                         </button>
                       )}
-                      
+
                       <div className="w-full sm:w-[150px]">
                         <label className="text-[10px] text-neutral-500 uppercase font-bold mb-1.5 block">Metric Name</label>
                         <input type="text" placeholder="e.g. Read Pages" className="w-full bg-black border border-neutral-800 p-2.5 rounded-lg text-white text-sm outline-none focus:border-blue-500 transition-colors" value={metric.name} onChange={e => { const newM = [...metricsList]; newM[idx].name = e.target.value; setMetricsList(newM); }} />
@@ -610,7 +646,7 @@ export default function Dashboard() {
                           <option value="count">Count (Numbers)</option>
                         </select>
                       </div>
-                      
+
                       {metric.metricType !== "boolean" && (
                         <>
                           <div className="w-20">

@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from fastapi.security import OAuth2PasswordRequestForm
+from arq import ArqRedis
 
+from app.core.dependencies import get_task_queue
 from app.core.security import hash_password
 from app.db.database import get_db
 from app.models.user import User
@@ -15,6 +17,7 @@ from app.core.security import (
 from app.auth.oauth2 import get_current_user
 from app.core.dependencies import get_user_service
 from app.services.user_service import UserService
+from app.core.rate_limit import login_rate_limiter
 
 
 
@@ -33,7 +36,7 @@ async def create_user(user: UserCreate, user_service : UserService = Depends(get
     
     return new_user
 
-@router.post("/auth/login")
+@router.post("/auth/login", dependencies=[Depends(login_rate_limiter)])
 async def login_user(
         user_credentials: OAuth2PasswordRequestForm = Depends(),
         user_service : UserService = Depends(get_user_service)
@@ -63,3 +66,16 @@ async def protected_route(
         "message": "Authenticated",
         "user": current_user.email
     }
+
+
+@router.post("/report/weekly")
+async def request_weekly_report(
+    current_user: User = Depends(get_current_user),
+    task_queue: ArqRedis = Depends(get_task_queue)
+):
+    # This is the magic. It instantly writes the ticket to Redis.
+    # The first argument is the EXACT name of the function in worker.py
+    # The second argument is the email address we want to pass to the function
+    await task_queue.enqueue_job('generate_weekly_report', current_user.email)
+    
+    return {"message": "Report generation started. We will email you shortly!"}

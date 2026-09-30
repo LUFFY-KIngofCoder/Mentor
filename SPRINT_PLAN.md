@@ -33,18 +33,18 @@ We will implement this directly into the `Mentor` codebase, step by step.
 *   **Action 2 (Pagination & Filtering):** Update `GET /api/commitments` to implement **Cursor Pagination** (`cursor` and `size`) for infinite scrolling, bypassing the slow `OFFSET` method.
 *   **Action 3 (Response Schemas):** Strictly type all outputs using Pydantic so we never accidentally leak password hashes or internal DB IDs.
 
-### Epic 4: Database Performance & Async Mastery
+### Epic 4: Database Performance & Async Mastery ✅
 **Goal:** Prove our async database is actually fast by analyzing its execution.
 *   **Action 1 (Query Plans):** Use PostgreSQL `EXPLAIN ANALYZE` on our heaviest query (the Analytics streak calculation). 
 *   **Action 2 (Indexes):** Add composite indexes to `MetricLog.date` and `MetricLog.is_successful` via Alembic to speed up the streak query.
 *   **Action 3 (Async Concurrency):** Build a dashboard endpoint that fetches User Profile, Active Commitments, and Streak Analytics *concurrently* using `asyncio.gather()` rather than sequentially. Measure the speed difference.
 
-### Epic 5: Redis Integration
+### Epic 5: Redis Integration ✅
 **Goal:** Introduce in-memory caching and abuse prevention.
 *   **Action 1 (Caching):** The Analytics streak calculation is heavy. When a user requests it, cache the result in Redis with a 1-hour TTL. Invalidate this cache immediately if the user logs a new `daily_entry`.
 *   **Action 2 (Rate Limiting):** Implement a Redis-backed token bucket rate limiter to restrict `/api/auth/login` to 5 requests per minute per IP to prevent brute-force attacks.
 
-### Epic 6: Background Jobs & Reliability
+### Epic 6: Background Jobs & Reliability ✅
 **Goal:** Offload slow tasks from the main API thread and handle failures gracefully.
 *   **Action 1 (Task Queue):** Set up a Redis-backed background worker (e.g., Celery or ARQ).
 *   **Action 2 (The Job):** Create a background job to generate a "Weekly Progress Report" (mock email) for the user.

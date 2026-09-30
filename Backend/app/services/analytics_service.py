@@ -3,6 +3,8 @@ from sqlalchemy import select, func, desc, and_
 from datetime import timedelta
 from uuid import UUID
 from typing import List
+from redis.asyncio import Redis
+import json
 
 from app.models import User, Commitment, DailyEntry, MetricLog, TrackingMetric
 from app.utils.time import now_ist
@@ -10,10 +12,19 @@ from app.core.exceptions import NotFoundException
 from app.schema.analytics import AnalyticMetrics, CommitmentAnalyticsResponse
 
 class AnalyticsService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis:Redis):
         self.db = db
+        self.redis = redis
 
     async def calculate_streak(self, current_user: User) -> List[CommitmentAnalyticsResponse]:
+        
+        cache_key = f"user:{current_user.id}:streak"
+        cached_data = await self.redis.get(cache_key)
+
+        if cached_data:
+            parsed_data = json.loads(cached_data)
+            return [CommitmentAnalyticsResponse(**item) for item in parsed_data]
+        
         # Get active commitments
         result = await self.db.execute(select(Commitment).filter_by(user_id=current_user.id, status='active'))
         active_commitments = result.scalars().all()
@@ -71,5 +82,9 @@ class AnalyticsService:
                     )
                 )
             ) 
+
+        json_data = f"[{','.join(c.model_dump_json() for c in commitment_analytics)}]"
+        await self.redis.set(cache_key, json_data, ex=3600)
             
         return commitment_analytics
+
