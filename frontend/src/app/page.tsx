@@ -15,6 +15,16 @@ const EyeClosed = () => (
   </svg>
 );
 
+const generateUUID = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 export default function Dashboard() {
   const [token, setToken] = useState<string | null>(null);
 
@@ -233,7 +243,7 @@ export default function Dashboard() {
       }, {
         headers: { "Idempotency-Key": idempotencyKey }
       });
-      setIdempotencyKey(crypto.randomUUID());
+      setIdempotencyKey(generateUUID());
       setIsCheckInOpen(false);
       setJournal(""); setWhatAvoided(""); setBiggestWin(""); setBiggestFailure(""); setWhatCanBeDifferent("");
       setSleep(""); setDeepWork(""); setDistraction(""); setMood(""); setEnergy("");
@@ -385,7 +395,7 @@ export default function Dashboard() {
             + New Commitment
           </button>
           <button onClick={() => {
-            if (!idempotencyKey) setIdempotencyKey(crypto.randomUUID());
+            if (!idempotencyKey) setIdempotencyKey(generateUUID());
             setIsCheckInOpen(true);
           }} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.2)] active:scale-95 text-sm">
             + Evening Reflection
