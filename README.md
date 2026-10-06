@@ -47,8 +47,9 @@ Mentor runs on a containerized, decoupled microservice gateway architecture host
 | Layer | Technologies & Tools |
 | :--- | :--- |
 | **Frontend** | Next.js 16 (App Router), React 19, TypeScript, TailwindCSS, Axios |
-| **Backend** | Python 3.10+, FastAPI, Async SQLAlchemy 2.0, Alembic, Pydantic v2 |
+| **Backend** | Python 3.10+, FastAPI, Async SQLAlchemy 2.0, Alembic, Pydantic v2, Redis, ARQ |
 | **Database** | Amazon RDS PostgreSQL (`db.t4g.micro`, Free Tier) with `asyncpg` driver |
+| **Cache & Tasks**| Redis Server, ARQ (Async Redis Queue) |
 | **Gateway & Network** | Nginx Reverse Proxy (Alpine), Docker Internal Bridge Network |
 | **Containerization** | Docker, Docker Compose (Multi-stage production builds) |
 | **CI / CD** | GitHub Actions (`ci.yml`), Pytest unit testing, Docker Hub Registry |
@@ -61,6 +62,14 @@ Mentor runs on a containerized, decoupled microservice gateway architecture host
 1. **Binary Accountability:** Habits are evaluated strictly as Boolean successes or failures at write-time based on target thresholds (`hours >= 8`, `pages >= 10`).
 2. **The Trapdoor Lockdown:** If a user fails to submit their evening reflection, the backend flags an unresolved missed day. The frontend mounts an un-closable, full-screen trapdoor modal (`z-[100]`), freezing all dashboards, streaks, and analytics until the user submits a deep psychological reflection explaining their failure.
 3. **Write-Time Analytics:** Consistency scores and consecutive streaks are calculated with SQL grouping and backward timestamp analysis.
+
+---
+
+## ⚡ High-Performance Systems Engineering
+
+1. **Redis Caching & Rate Limiting:** Strict token bucket rate limiting on Auth routes (5 req/min). Heavy Analytics endpoints are cached with Redis and actively invalidated on daily entry creation.
+2. **ARQ Background Tasks:** Redis-backed task queue handles heavy asynchronous jobs (like generating weekly progress report emails) fully decoupled from the main API thread.
+3. **Idempotency Engine:** Exact-once delivery semantics implemented for Daily Entry POST routes via an `Idempotency-Key` header, protecting the database from laggy client multi-click submissions.
 
 ---
 

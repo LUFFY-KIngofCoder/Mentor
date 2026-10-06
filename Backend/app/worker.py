@@ -2,6 +2,7 @@ import asyncio
 from arq.connections import RedisSettings
 import random
 from arq import Retry
+from app.core.config import settings
 
 async def generate_weekly_report(ctx , user_email: str):
 
@@ -29,4 +30,4 @@ async def generate_weekly_report(ctx , user_email: str):
 
 class WorkerSettings:
     functions = [generate_weekly_report]
-    redis_settings = RedisSettings(host="localhost", port=6379)
+    redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)

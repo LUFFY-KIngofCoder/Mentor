@@ -34,5 +34,10 @@ services:
     ports:
       - "3000:3000"
 
+  redis:
+    image: redis:alpine
+    container_name: mentor-redis
+    ports:
+      - "6379:6379"
 volumes:
   mentor-db-data:

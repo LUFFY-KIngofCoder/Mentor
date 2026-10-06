@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     ALGORITHM: str 
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     SENTRY_DSN: str | None = None
-    REDIS_URL: str | None = None
+    REDIS_URL: str 
 
     model_config = SettingsConfigDict(env_file='../.env', extra='ignore')
 

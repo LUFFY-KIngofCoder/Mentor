@@ -10,5 +10,5 @@ async def get_arq_pool():
     global arq_pool
     if not arq_pool:
         # Connect to the exact same Redis server the worker is listening to
-        arq_pool = await create_pool(RedisSettings(host='localhost', port=6379))
+        arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
     return arq_pool
